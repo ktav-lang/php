@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / PHP ${{ matrix.php }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        php: ["7.4", "8.2", "8.3"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ffi, json, mbstring, xdebug
+          ini-values: ffi.enable=1, xdebug.mode=off
+          coverage: xdebug
+
+      - name: Build native library
+        run: cargo build --release -p ktav-cabi
+
+      - name: Composer install
+        run: composer install --prefer-dist --no-progress
+
+      - name: Kahlan
+        # xdebug is installed (mode=off, so it doesn't slow specs)
+        # purely to satisfy Kahlan's coverage layer probe — `--coverage=0`
+        # alone still trips its "no PHPDBG / Xdebug" guard.
+        run: vendor/bin/kahlan --reporter=verbose
+
+  lint-rust:
+    name: rust clippy + fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --release -p ktav-cabi -- -D warnings

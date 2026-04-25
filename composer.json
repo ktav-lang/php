@@ -1,0 +1,43 @@
+{
+    "name": "ktav-lang/ktav",
+    "description": "PHP bindings for Ktav — a plain configuration format with three rules, zero indentation, and zero quoting. FFI over the reference Rust crate; no extension compilation on the consumer side.",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/ktav-lang/php",
+    "keywords": [
+        "ktav",
+        "config",
+        "configuration",
+        "parser",
+        "serializer",
+        "ffi"
+    ],
+    "authors": [
+        {
+            "name": "Marat K",
+            "email": "phpcraftdream@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "ext-ffi": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "kahlan/kahlan": "^5.2 || ^6.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Ktav\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Ktav\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "kahlan"
+    },
+    "minimum-stability": "stable"
+}

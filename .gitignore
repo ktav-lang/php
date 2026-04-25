@@ -1,0 +1,30 @@
+# Rust
+/target
+**/*.rs.bk
+Cargo.lock
+
+# PHP / Composer
+/vendor
+composer.lock
+.phpunit.cache
+.phpunit.result.cache
+
+# Editors / IDEs
+.idea/
+.vscode/
+.zed/
+*.code-workspace
+.history/
+*.swp
+*.swo
+*~
+
+# OS junk
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Local agent/dev scratch
+/docs_local
