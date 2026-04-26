@@ -42,7 +42,16 @@ final class Ktav
      */
     public static function dumps($value): string
     {
-        if (!is_array($value) || self::isList($value)) {
+        if (!is_array($value)) {
+            throw new KtavException('top-level Ktav document must be an object');
+        }
+        // Empty PHP array is ambiguous (list or object). Treat it as
+        // an empty object at the root, since cabi accepts that — and
+        // force the JSON encoder to emit `{}` rather than `[]`.
+        if ($value === []) {
+            return NativeLib::callBytes('ktav_dumps', '{}');
+        }
+        if (self::isList($value)) {
             throw new KtavException('top-level Ktav document must be an object');
         }
         $json = WireJson::encode($value);

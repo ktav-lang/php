@@ -129,7 +129,10 @@ final class NativeLoader
         ]);
         $fp = @fopen($url, 'rb', false, $ctx);
         if ($fp === false) {
-            throw new KtavException('cannot open ' . $url);
+            $hint = ini_get('allow_url_fopen')
+                ? ''
+                : ' (php.ini: allow_url_fopen is disabled)';
+            throw new KtavException('cannot open ' . $url . $hint);
         }
         try {
             // Check HTTP status — fopen returns a stream even on 404.
@@ -152,6 +155,12 @@ final class NativeLoader
             }
             try {
                 stream_copy_to_stream($fp, $out);
+                // Push to disk before rename so a crash mid-rename
+                // can't leave a truncated/empty file at $target.
+                fflush($out);
+                if (function_exists('fsync')) {
+                    @fsync($out);
+                }
             } finally {
                 fclose($out);
             }

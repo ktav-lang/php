@@ -17,11 +17,10 @@ final class NativeLib
     /** Version of `ktav_cabi` this build expects. Bump per release. */
     public const LIB_VERSION = '0.1.0';
 
+    // PHP-FFI knows uint8_t / size_t as built-in types — no typedefs
+    // needed. The previous `typedef unsigned long long size_t` was
+    // also wrong on 32-bit platforms.
     private const CDEF = <<<'C'
-        typedef int int32_t;
-        typedef unsigned char uint8_t;
-        typedef unsigned long long size_t;
-
         int ktav_loads(
             const uint8_t *src, size_t src_len,
             uint8_t **out_buf, size_t *out_len,
@@ -118,9 +117,10 @@ final class NativeLib
         if ($ret === null) {
             return '';
         }
-        // PHP FFI auto-converts `const char *` returns to a PHP string
-        // when the value is non-null. Older versions handed back a CData
-        // pointer that needed `\FFI::string`; modern versions don't.
+        // Some PHP-FFI versions auto-convert `const char *` returns to a
+        // PHP string, others hand back a CData pointer that needs
+        // \FFI::string. Handle both — the test matrix covers 7.4 / 8.2 /
+        // 8.3 and the behavior diverges across them.
         if (is_string($ret)) {
             return $ret;
         }
