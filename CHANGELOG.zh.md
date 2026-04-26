@@ -10,10 +10,23 @@ MINOR 递增视为破坏性变更。
 本 changelog 跟踪 **绑定发布**,不覆盖 Ktav 格式自身的变更 ——
 后者见 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md)。
 
-## Unreleased
+## 0.1.1 —— 2026-04-26
 
 ### 变更
 
+- **升级到 `ktav 0.1.4`** —— 上游 Rust crate 中 `cabi` 使用的 untyped
+  `parse() → Value` 路径,小文档加速约 30%、大文档加速约 13%,只是
+  `Frame::Object` 的初始容量微调(4 → 8)。每次 `Ktav::loads` 都会
+  透明地受益。
+- **`Ktav::dumps([])` 现在渲染空文档**,不再抛异常。此前
+  list/object 消歧逻辑会拒绝空数组,这与 cabi 的「接受空对象」
+  语义不一致。
+- **`NativeLoader::download` 在 rename 之前 flush + fsync** 临时文件
+  —— 中途崩溃不再可能留下被截断的缓存库。
+- **`fopen` 失败时提示检查 `allow_url_fopen=Off`**(php.ini),—— 这是
+  锁定环境下最常见的首次运行陷阱。
+- **去除 `NativeLib::CDEF` 中冗余的 `typedef`**(PHP-FFI 原生认识
+  `uint8_t` / `size_t`,且 `size_t` 的 typedef 在 32 位平台上是错的)。
 - 测试已从 PHPUnit 迁移到
   **[Kahlan](https://kahlan.github.io/docs/)**(BDD 风格的
   `describe` / `it` 规范)。`composer require-dev` 现在拉取

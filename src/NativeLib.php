@@ -15,7 +15,7 @@ namespace Ktav;
 final class NativeLib
 {
     /** Version of `ktav_cabi` this build expects. Bump per release. */
-    public const LIB_VERSION = '0.1.0';
+    public const LIB_VERSION = '0.1.1';
 
     // PHP-FFI knows uint8_t / size_t as built-in types — no typedefs
     // needed. The previous `typedef unsigned long long size_t` was

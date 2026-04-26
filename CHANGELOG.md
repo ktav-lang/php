@@ -11,10 +11,27 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.1.1 — 2026-04-26
 
 ### Changed
 
+- **Picked up `ktav 0.1.4`** — the upstream Rust crate's untyped
+  `parse() → Value` path (which is what `cabi` uses) is now ~30%
+  faster on small documents and ~13% faster on large ones, just from
+  a one-line `Frame::Object` capacity tweak (4 → 8). Every `Ktav::loads`
+  call benefits transparently.
+- **`Ktav::dumps([])` now renders an empty document** instead of
+  throwing. Previously the list/object disambiguation rejected the
+  empty array as ambiguous, which diverged from cabi's accept-empty-
+  object semantics.
+- **`NativeLoader::download` flushes + fsyncs** the temp file before
+  rename so a crash mid-rename can't surface as a truncated cached
+  library.
+- **`fopen` failure now hints at `allow_url_fopen=Off`** in php.ini
+  — the most common first-run grief on locked-down installs.
+- **Dropped redundant `typedef`s** from `NativeLib::CDEF` (PHP-FFI
+  knows `uint8_t` / `size_t` natively, and the `size_t` typedef was
+  wrong on 32-bit platforms).
 - Tests migrated from PHPUnit to **[Kahlan](https://kahlan.github.io/docs/)**
   (BDD-style `describe`/`it` specs). `composer require-dev` now
   pulls `kahlan/kahlan` instead of `phpunit/phpunit`; `composer test`

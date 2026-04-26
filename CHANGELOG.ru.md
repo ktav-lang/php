@@ -11,10 +11,27 @@
 формата Ktav — для последнего см.
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
-## Unreleased
+## 0.1.1 — 2026-04-26
 
 ### Изменено
 
+- **Подхватили `ktav 0.1.4`** — untyped путь `parse() → Value` в
+  upstream Rust crate (тот, что использует `cabi`) теперь ~30%
+  быстрее на маленьких документах и ~13% на больших, благодаря
+  однострочной правке initial capacity для `Frame::Object` (4 → 8).
+  Каждый `Ktav::loads` получит ускорение прозрачно.
+- **`Ktav::dumps([])` теперь рендерит пустой документ** вместо
+  исключения. Раньше list/object disambiguation отвергал пустой
+  массив как неоднозначный, что расходилось с cabi-семантикой
+  «пустой объект OK».
+- **`NativeLoader::download` делает flush + fsync** временного файла
+  перед rename — на крэше посередине больше не получим обрезанный
+  кэшированный binary.
+- **`fopen`-ошибка теперь подсказывает про `allow_url_fopen=Off`**
+  в php.ini — самый частый first-run grief на залоченных хостингах.
+- **Убрали лишние `typedef`'ы** из `NativeLib::CDEF` (PHP-FFI знает
+  `uint8_t` / `size_t` нативно, а typedef'ы для `size_t` были неверны
+  на 32-битных платформах).
 - Тесты переехали с PHPUnit на **[Kahlan](https://kahlan.github.io/docs/)**
   (BDD-style `describe`/`it`-спеки). `composer require-dev` теперь
   тянет `kahlan/kahlan` вместо `phpunit/phpunit`; `composer test`
