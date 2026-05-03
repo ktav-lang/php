@@ -11,6 +11,24 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## 0.1.2 — 2026-05-03
+
+### Changed
+
+- **Picked up `ktav 0.1.5`** — the upstream Rust crate now exposes
+  `Error::Structured(ErrorKind)` with byte-offset spans, retroactive
+  `#[non_exhaustive]` on the error enums, and a public `ktav::thin`
+  event-based parser. The PHP binding's user-visible behaviour is
+  unchanged: `KtavException` carries the same human-readable message
+  (Display strings for the seven canonical categories are byte-
+  identical to ktav 0.1.4 — verified by ktav's own pinning tests).
+  Mapping `ktav::ErrorKind` to a structured PHP exception hierarchy
+  (`KtavMissingSeparatorSpaceException`, `KtavDuplicateKeyException`,
+  etc.) is separate follow-up work tracked in the workspace's
+  [`STRUCTURED_ERRORS.md`](https://github.com/ktav-lang/.github/blob/main/STRUCTURED_ERRORS.md).
+
+Packagist: `ktav-lang/ktav` ^0.1.2.
+
 ## 0.1.1 — 2026-04-26
 
 ### Changed
