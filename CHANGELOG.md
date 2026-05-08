@@ -11,6 +11,36 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## 0.3.0 — 2026-05-08
+
+### Changed (breaking)
+
+- **Picked up `ktav 0.3.0`** — the upstream Rust crate now rejects
+  `key: (value)` and `key: ((value))` with
+  `ErrorKind::InlineNonEmptyCompound { body: "paren-string" }`.
+  These shapes were previously accepted as plain string scalars
+  but are visually indistinguishable from multi-line openers. Use
+  the raw-marker form `key:: (value)` to encode such literals;
+  the ktav-lsp formatter auto-rewrites the legacy form on save.
+  See the
+  [`ktav` crate CHANGELOG](https://github.com/ktav-lang/rust/blob/main/CHANGELOG.md#030--2026-05-08).
+
+### Fixed
+
+- `LIB_VERSION` now tracks the binding's release tag, so the
+  runtime downloads the matching `ktav_cabi-*` asset from
+  `https://github.com/ktav-lang/php/releases/download/v0.3.0/`.
+  Previously this constant was pinned at `0.1.1` even on `0.2.0`,
+  so the loader fetched the older cabi build.
+
+### Spec
+
+- spec submodule synced (paren-string handling tightened —
+  new invalid fixtures `inline_paren_string_single` /
+  `inline_paren_string_double`; `partial_parens` valid fixture
+  trimmed of newly-illegal forms).
+
+
 ## 0.2.0 — 2026-05-07
 
 ### Changed (breaking)
