@@ -11,6 +11,55 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## [0.3.1] — 2026-05-10
+
+### Added
+
+- **Top-level Array support (spec § 5.0.1).** A document whose first
+  content line has an array-item shape (bare scalar, `:: text`,
+  `:i 42`, `:f 3.14`, lone `{` / `[`, or a multi-line opener `(` /
+  `((`) now parses as a sequential PHP list. Previously a bare-scalar
+  first line errored as `MissingSeparator`. Empty / comments-only
+  documents still default to an empty associative array (preserves
+  0.3.0 behaviour).
+- **`Ktav::dumps()` accepts top-level Arrays.** Sequential PHP arrays
+  at the root now render as bare item-per-line (no surrounding
+  `[...]` brackets). Previously `dumps([1,2,3])` threw — now it
+  succeeds. Bare scalars at the root are still rejected.
+- **`Ktav::dumpsForceStrings($value)`** — render any value with
+  every scalar coerced to a String: typed integers, typed floats,
+  booleans, and null are flattened to their textual form
+  (`42`, `3.14`, `true`, `null`) and emitted via the raw-marker
+  `::` so the output round-trips back through the parser as the
+  same string scalars. Compounds preserve their structure; only
+  leaf scalars are coerced. Useful for "everything is a string"
+  dumps for downstream consumers that don't understand the
+  `:i` / `:f` typed markers.
+
+### Changed
+
+- **Picked up `ktav 0.3.1`** — the upstream Rust crate now
+  implements top-level Array detection and exposes
+  `ktav::to_string_force_strings`, both surfaced through the cabi
+  layer (`ktav_dumps_force_strings`, plus root-Array acceptance in
+  `ktav_dumps`). See the
+  [`ktav` crate CHANGELOG](https://github.com/ktav-lang/rust/blob/main/CHANGELOG.md#031--2026-05-10).
+
+### Compatibility
+
+Strictly additive. Every 0.3.0-valid document stays valid and
+produces the same value. Every 0.3.0-valid `dumps` call returns
+the same text. Only inputs 0.3.0 rejected as `MissingSeparator`
+now succeed (as top-level Arrays), and only `dumps([1,2,3])`-style
+calls that previously threw now succeed.
+
+### Spec
+
+- spec submodule synced to **0.1.1** (commit `7256816`) — top-level
+  Array detection in § 5.0.1, anchored first-line invalid fixtures,
+  clarified pair-shape-inside-Array behaviour.
+
+
 ## 0.3.0 — 2026-05-08
 
 ### Changed (breaking)

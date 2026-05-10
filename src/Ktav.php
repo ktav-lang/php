@@ -23,6 +23,11 @@ final class Ktav
     /**
      * Parse a Ktav document into a native PHP value.
      *
+     * Top-level Object documents come back as an associative array;
+     * top-level Array documents (spec § 5.0.1, since 0.1.1) come back
+     * as a sequential PHP list. Empty / comments-only documents
+     * default to an empty associative array.
+     *
      * @throws KtavException on any parse error.
      * @return mixed null|bool|int|float|string|array
      */
@@ -34,28 +39,37 @@ final class Ktav
 
     /**
      * Render a native PHP value back to Ktav text. Top-level value
-     * must be an associative array — sequential arrays and scalars
-     * at the root are rejected.
+     * must be an associative array (Object) or a sequential array
+     * (top-level Array, spec § 5.0.1, since 0.1.1) — bare scalars at
+     * the root are rejected.
      *
-     * @param array<string, mixed> $value
+     * @param array<mixed, mixed> $value
      * @throws KtavException on any render error.
      */
     public static function dumps($value): string
     {
-        if (!is_array($value)) {
-            throw new KtavException('top-level Ktav document must be an object');
-        }
-        // Empty PHP array is ambiguous (list or object). Treat it as
-        // an empty object at the root, since cabi accepts that — and
-        // force the JSON encoder to emit `{}` rather than `[]`.
-        if ($value === []) {
-            return NativeLib::callBytes('ktav_dumps', '{}');
-        }
-        if (self::isList($value)) {
-            throw new KtavException('top-level Ktav document must be an object');
-        }
-        $json = WireJson::encode($value);
-        return NativeLib::callBytes('ktav_dumps', $json);
+        return self::dumpsImpl('ktav_dumps', $value);
+    }
+
+    /**
+     * Render with **every scalar coerced to a String**: typed
+     * integers, typed floats, booleans, and null are flattened to
+     * their textual form (e.g. `42`, `3.14`, `true`, `null`) and
+     * emitted via the raw-marker `::` so the output round-trips back
+     * through the parser as the same string scalars.
+     *
+     * Compounds (associative / sequential arrays) preserve their
+     * structure; only leaf scalars are coerced. Useful for dumping
+     * configuration in a "everything is a string" shape — e.g. for
+     * environments or downstream consumers that don't understand the
+     * `:i` / `:f` typed markers.
+     *
+     * @param array<mixed, mixed> $value
+     * @throws KtavException on any render error.
+     */
+    public static function dumpsForceStrings($value): string
+    {
+        return self::dumpsImpl('ktav_dumps_force_strings', $value);
     }
 
     /**
@@ -74,23 +88,21 @@ final class Ktav
      */
     public const ExpectedNativeVersion = NativeLib::LIB_VERSION;
 
-    /** @param array<mixed,mixed> $arr */
-    private static function isList(array $arr): bool
+    /**
+     * @param mixed $value
+     */
+    private static function dumpsImpl(string $fn, $value): string
     {
-        // `array_is_list` is PHP 8.1+. Manual fallback for 7.4 / 8.0.
-        if (function_exists('array_is_list')) {
-            return array_is_list($arr);
+        if (!is_array($value)) {
+            throw new KtavException('top-level Ktav document must be an object or array');
         }
-        if ($arr === []) {
-            return true; // empty list / empty object — both render fine, treat as list to reject root
+        // Empty PHP array is ambiguous (list or object). The cabi side
+        // accepts both `{}` and `[]` at the root — pick `{}` for
+        // backward compatibility (pre-0.3.1 always emitted Object).
+        if ($value === []) {
+            return NativeLib::callBytes($fn, '{}');
         }
-        $i = 0;
-        foreach ($arr as $k => $_) {
-            if ($k !== $i) {
-                return false;
-            }
-            $i++;
-        }
-        return true;
+        $json = WireJson::encode($value);
+        return NativeLib::callBytes($fn, $json);
     }
 }
