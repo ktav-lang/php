@@ -2,7 +2,7 @@
     "name": "ktav-lang/ktav",
     "description": "PHP bindings for Ktav — a plain configuration format with three rules, zero indentation, and zero quoting. FFI over the reference Rust crate; no extension compilation on the consumer side.",
     "type": "library",
-    "license": "MIT",
+    "license": "MIT OR Apache-2.0",
     "homepage": "https://github.com/ktav-lang/php",
     "keywords": [
         "ktav",

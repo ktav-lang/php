@@ -11,6 +11,39 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## [0.5.0] — 2026-05-28
+
+Implements Ktav spec 0.5.0. Tracks ktav-rust 0.5.0.
+
+### Breaking
+
+- Typed markers `:i` / `:f` removed. Numbers, booleans, and `null` are
+  inferred from the lexical form (spec §§ 3.6, 5.2). Write `port: 8080`
+  for Integer, `port:: 8080` to keep a String.
+- Comments now use `##` (own line). A single `#` byte is content, not a
+  comment.
+- Bare integers and floats no longer parse as String — `port: 8080`
+  yields integer `8080`, not string `"8080"`.
+- Key segments are trimmed of leading/trailing whitespace.
+
+### Added
+
+- **Inline compounds** `{k: v, …}` / `[i, …]` (spec § 5.8).
+- **Eight escape sequences** in inline scalars: `\\`, `\,`, `\}`, `\]`,
+  `\{`, `\[`, `\n`, `\r` (spec § 3.7).
+- **`Ktav::emitCanonical($value)`** — render to the deterministic
+  canonical Ktav form (spec § 7), via the new `ktav_emit_canonical`
+  C ABI export.
+
+### Changed
+
+- License: MIT → MIT OR Apache-2.0 (`LICENSE-MIT` + `LICENSE-APACHE`).
+- Spec submodule: v0.5.0.
+- ktav-rust dependency: 0.5.0.
+- Conformance tests now run against `spec/versions/0.5/tests/`.
+
+---
+
 ## [0.3.1] — 2026-05-10
 
 ### Added

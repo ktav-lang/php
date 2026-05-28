@@ -10,9 +10,14 @@ namespace Ktav;
  * .NET / JS bindings, same `{"$i":"…"}` / `{"$f":"…"}` JSON wire
  * format with lossless typed-integer / typed-float round-trip.
  *
+ * Since spec 0.5.0: typed markers `:i` / `:f` are inferred from the
+ * lexical form (`port: 8080` yields an Integer, not a String). Use the
+ * raw-marker form (`port:: 8080`) to keep a value as a String. Comments
+ * now require `##` (a single `#` is content).
+ *
  * Usage:
  *
- *     $cfg = \Ktav\Ktav::loads("port:i 8080\n");
+ *     $cfg = \Ktav\Ktav::loads("port: 8080\n");
  *     echo \Ktav\Ktav::dumps(['name' => 'demo', 'count' => 42]);
  *
  * Requires PHP 7.4+ with the FFI extension enabled (`ffi.enable=1` in
@@ -70,6 +75,21 @@ final class Ktav
     public static function dumpsForceStrings($value): string
     {
         return self::dumpsImpl('ktav_dumps_force_strings', $value);
+    }
+
+    /**
+     * Render a native PHP value to the deterministic **canonical** Ktav
+     * form (spec § 7). The output is stable across platforms, sorts
+     * object keys, and round-trips unchanged through `loads` / `dumps`.
+     *
+     * Useful for diffing, hashing, and golden-file tests.
+     *
+     * @param array<mixed, mixed> $value
+     * @throws KtavException on any render error.
+     */
+    public static function emitCanonical($value): string
+    {
+        return self::dumpsImpl('ktav_emit_canonical', $value);
     }
 
     /**

@@ -19,12 +19,12 @@ describe('Ktav (smoke)', function () {
 
         it('parses a basic typed document', function () {
             $src = "service: web\n"
-                . "port:i 8080\n"
-                . "ratio:f 0.75\n"
+                . "port: 8080\n"
+                . "ratio: 0.75\n"
                 . "tls: true\n"
                 . "tags: [\n    prod\n    eu-west-1\n]\n"
                 . "db.host: primary\n"
-                . "db.timeout:i 30\n";
+                . "db.timeout: 30\n";
             $cfg = Ktav::loads($src);
 
             expect($cfg['service'])->toBe('web');
@@ -67,7 +67,7 @@ describe('Ktav (smoke)', function () {
             expect($back['nested']['inner'])->toBe(1);
         });
 
-        it('renders a top-level Array (spec § 5.0.1, since 0.1.1)', function () {
+        it('renders a top-level Array (spec § 5.0.1)', function () {
             $text = Ktav::dumps(['alpha', 'beta', 'gamma']);
             expect($text)->not->toBe('');
 
@@ -116,20 +116,20 @@ describe('Ktav (smoke)', function () {
 
     });
 
-    describe('top-level Array detection (spec § 5.0.1, since 0.1.1)', function () {
+    describe('top-level Array detection (spec § 5.0.1)', function () {
 
         it('parses bare-scalar first line as a list', function () {
             $cfg = Ktav::loads("alpha\nbeta\ngamma\n");
             expect($cfg)->toBe(['alpha', 'beta', 'gamma']);
         });
 
-        it('parses typed-marker first line as a list', function () {
-            $cfg = Ktav::loads(":i 42\n:i 7\n");
+        it('parses numeric first line as a list', function () {
+            $cfg = Ktav::loads("42\n7\n");
             expect($cfg)->toBe([42, 7]);
         });
 
         it('still treats key:value first line as Object', function () {
-            $cfg = Ktav::loads("port:i 8080\n");
+            $cfg = Ktav::loads("port: 8080\n");
             expect($cfg)->toBe(['port' => 8080]);
         });
 
@@ -139,13 +139,26 @@ describe('Ktav (smoke)', function () {
 
         it('round-trips digits beyond PHP_INT_MAX', function () {
             $huge = '99999999999999999999999999999';
-            $cfg = Ktav::loads('value:i ' . $huge);
+            $cfg = Ktav::loads('value: ' . $huge);
             // Out of PHP int range — comes back as the digit string.
             expect($cfg['value'])->toBe($huge);
 
             // Wrap it as `['$i' => 'digits']` to feed back in.
             $text = Ktav::dumps(['v' => ['$i' => $huge]]);
             expect($text)->toContain($huge);
+        });
+
+    });
+
+    describe('::emitCanonical', function () {
+
+        it('returns a non-empty canonical string', function () {
+            $text = Ktav::emitCanonical(['b' => 2, 'a' => 1]);
+            expect($text)->not->toBe('');
+
+            $back = Ktav::loads($text);
+            expect($back['a'])->toBe(1);
+            expect($back['b'])->toBe(2);
         });
 
     });

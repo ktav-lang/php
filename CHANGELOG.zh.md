@@ -10,6 +10,34 @@ MINOR 递增视为破坏性变更。
 本 changelog 跟踪 **绑定发布**,不覆盖 Ktav 格式自身的变更 ——
 后者见 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md)。
 
+## 0.5.0 —— 2026-05-28
+
+实现 Ktav 规范 0.5.0。跟踪 ktav-rust 0.5.0。
+
+### 破坏性变更
+
+- 类型标记 `:i` / `:f` 已移除。数字、布尔值和 `null` 根据词法形式推断
+  (规范 §§ 3.6, 5.2)。写 `port: 8080` 得到 Integer，写 `port:: 8080`
+  保留 String。
+- 注释现在使用 `##`。单个 `#` 字节是内容，不是注释。
+- 裸整数和浮点数不再解析为 String。
+- 键的首尾空格现在被裁剪。
+
+### 新增
+
+- **内联复合类型** `{k: v, …}` / `[i, …]`（规范 § 5.8）。
+- **八个转义序列**（规范 § 3.7）。
+- **`Ktav::emitCanonical($value)`** — 渲染为确定性规范 Ktav 形式
+  （规范 § 7）。
+
+### 变更
+
+- 许可证：MIT → MIT OR Apache-2.0（`LICENSE-MIT` + `LICENSE-APACHE`）。
+- spec 子模块：v0.5.0。
+- ktav-rust 依赖：0.5.0。
+
+---
+
 ## 0.1.2 —— 2026-05-03
 
 ### 变更

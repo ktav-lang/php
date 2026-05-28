@@ -118,7 +118,7 @@ macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
 
 ## Other Ktav implementations
 

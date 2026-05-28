@@ -21,7 +21,7 @@ describe('Ktav (conformance)', function () {
         $items = [];
         foreach ($iter as $file) {
             $path = $file->getPathname();
-            if (substr($path, -5) === '.ktav') {
+            if (substr($path, -5) === '.ktav' && strpos($path, '.canonical.ktav') === false) {
                 $rel = substr($path, strlen($dir) + 1);
                 $rel = str_replace('\\', '/', $rel);
                 $items[$rel] = $path;
