@@ -24,7 +24,7 @@ final class TestPaths
 
     public static function spec(): string
     {
-        return self::REPO . '/spec/versions/0.5/tests';
+        return self::REPO . '/spec/versions/0.6/tests';
     }
 
     public static function cabiBuilt(): bool

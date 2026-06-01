@@ -139,3 +139,9 @@ Ktav 的口号:**"做配置的朋友,不做配置的考官。"**
 本仓库参与组织级三语政策(EN / RU / ZH)。命名约定和
 "三份一并更新"规则见
 [`ktav-lang/.github/AGENTS.md`](https://github.com/ktav-lang/.github/blob/main/AGENTS.md)。
+
+### 贡献的许可
+
+除非您另有明确声明,否则您有意提交以纳入本项目的任何贡献(按
+Apache-2.0 许可证中的定义),均按 **MIT OR Apache-2.0** 双重许可,
+不附加任何额外条款或条件。

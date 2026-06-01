@@ -94,6 +94,19 @@ To emit an arbitrary-precision integer, wrap the digit string yourself:
 `['big' => ['$i' => '9999999999999999999']]` — same envelope used on the
 wire between PHP and the native side.
 
+## Key escaping
+
+Since spec 0.6.0 a literal `.` or `:` inside a key segment is written
+with a backslash:
+
+```text
+a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
+a\:b: v        # key contains a colon          → ["a:b" => "v"]
+x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+```
+
+A literal backslash in a key is `\\`.
+
 ## How the native library is resolved
 
 On first call:
