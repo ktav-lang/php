@@ -33,15 +33,15 @@ use Ktav\Ktav;
 
 $src = <<<KTAV
 service: web
-port:i 8080
-ratio:f 0.75
+port: 8080
+ratio: 0.75
 tls: true
 tags: [
     prod
     eu-west-1
 ]
 db.host: primary.internal
-db.timeout:i 30
+db.timeout: 30
 KTAV;
 
 $cfg = Ktav::loads($src);
@@ -91,9 +91,9 @@ the UTF-8 string produced by the native parser.
 | ---------------- | ---------------------------------------------------- |
 | `null`           | `null`                                               |
 | `true` / `false` | `bool`                                               |
-| `:i <digits>`    | `int` if it fits, else `string` (PHP has no native bigint — wrap your own GMP / BCMath if you need arithmetic). |
-| `:f <number>`    | `float`                                              |
-| bare scalar      | `string`                                             |
+| bare integer     | `int` if it fits, else `string` (PHP has no native bigint — wrap your own GMP / BCMath if you need arithmetic). |
+| bare decimal     | `float`                                              |
+| other scalar     | `string`                                             |
 | `[ ... ]`        | sequential `array`                                   |
 | `{ ... }`        | associative `array` (insertion order preserved)      |
 

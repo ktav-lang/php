@@ -125,7 +125,7 @@ CI runs the same commands; run them locally before pushing.
 
 - **Wire format.** Rust and Java exchange JSON over the FFI boundary,
   with `{"$i":"..."}` / `{"$f":"..."}` wrappers for typed integers /
-  floats. This preserves arbitrary precision and the `:i` vs `:f`
+  floats. This preserves arbitrary precision and the Integer vs Float
   distinction through encoding / decoding.
 - **Memory ownership.** Rust allocates the output buffer; Java copies
   it into a `byte[]` and immediately calls `ktav_free` on the Rust

@@ -33,15 +33,15 @@ use Ktav\Ktav;
 
 $src = <<<KTAV
 service: web
-port:i 8080
-ratio:f 0.75
+port: 8080
+ratio: 0.75
 tls: true
 tags: [
     prod
     eu-west-1
 ]
 db.host: primary.internal
-db.timeout:i 30
+db.timeout: 30
 KTAV;
 
 $cfg = Ktav::loads($src);
@@ -90,9 +90,9 @@ $text = Ktav::dumps($doc);
 | ---------------- | ---------------------------------------------------- |
 | `null`           | `null`                                               |
 | `true` / `false` | `bool`                                               |
-| `:i <digits>`    | `int` если влезает, иначе `string` (нативного bigint в PHP нет — оборачивайте сами через GMP / BCMath если нужна арифметика). |
-| `:f <number>`    | `float`                                              |
-| bare scalar      | `string`                                             |
+| голое целое      | `int` если влезает, иначе `string` (нативного bigint в PHP нет — оборачивайте сами через GMP / BCMath если нужна арифметика). |
+| голое десятичное | `float`                                              |
+| прочий скаляр    | `string`                                             |
 | `[ ... ]`        | последовательный `array`                             |
 | `{ ... }`        | ассоциативный `array` (порядок вставки сохраняется)  |
 
