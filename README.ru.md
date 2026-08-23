@@ -79,6 +79,7 @@ $text = Ktav::dumps($doc);
 | Метод | Назначение |
 | --- | --- |
 | `Ktav::loads(string $src): mixed` | Разобрать Ktav-документ. |
+| `Ktav::loadsStrict(string $src): mixed` | Разобрать документ со строгой проверкой записи чисел. |
 | `Ktav::dumps(array $value): string` | Отрендерить ассоциативный массив в Ktav. |
 | `Ktav::nativeVersion(): string` | Версия загруженного `ktav_cabi`. |
 
@@ -102,7 +103,7 @@ $text = Ktav::dumps($doc);
 
 ## Экранирование в ключах
 
-Начиная со spec 0.6.0 литеральные `.` или `:` внутри сегмента ключа
+Начиная со spec 0.6.4 литеральные `.` или `:` внутри сегмента ключа
 записываются через backslash:
 
 ```text

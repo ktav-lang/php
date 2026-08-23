@@ -79,6 +79,7 @@ $text = Ktav::dumps($doc);
 | 方法 | 用途 |
 | --- | --- |
 | `Ktav::loads(string $src): mixed` | 解析 Ktav 文档。 |
+| `Ktav::loadsStrict(string $src): mixed` | 使用严格数字词法检查解析文档。 |
 | `Ktav::dumps(array $value): string` | 将关联数组渲染为 Ktav 文本。 |
 | `Ktav::nativeVersion(): string` | 已加载 `ktav_cabi` 的版本。 |
 
@@ -102,7 +103,7 @@ $text = Ktav::dumps($doc);
 
 ## 键的转义
 
-自 spec 0.6.0 起,键段内的字面量 `.` 或 `:` 通过反斜杠书写:
+自 spec 0.6.4 起,键段内的字面量 `.` 或 `:` 通过反斜杠书写:
 
 ```text
 a\.b: v        # 键是单个段 "a.b"        → ["a.b" => "v"]

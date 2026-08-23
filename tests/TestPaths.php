@@ -19,7 +19,11 @@ final class TestPaths
         $name = PHP_OS_FAMILY === 'Windows'
             ? 'ktav_cabi.dll'
             : (PHP_OS_FAMILY === 'Darwin' ? 'libktav_cabi.dylib' : 'libktav_cabi.so');
-        return self::REPO . '/target/release/' . $name;
+        $target = getenv('CARGO_TARGET_DIR');
+        $base = $target !== false && $target !== ''
+            ? rtrim($target, '/\\')
+            : self::REPO . '/target';
+        return $base . '/release/' . $name;
     }
 
     public static function spec(): string
@@ -46,7 +50,10 @@ final class TestPaths
         static $done = false;
         if ($done) return;
         $done = true;
-        if (self::cabiBuilt()) {
+        $override = getenv('KTAV_LIB_PATH');
+        if ($override !== false && $override !== '') {
+            NativeLoader::setLibraryPath($override);
+        } elseif (self::cabiBuilt()) {
             NativeLoader::setLibraryPath(self::cabi());
         }
     }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Ktav;
 
 /**
- * FFI binding to the `ktav_cabi` shared library. Four functions, all
+ * FFI binding to the `ktav_cabi` shared library. Seven functions, all
  * using the canonical "caller-owned input pointer, callee-owned output
  * buffer" pattern. The output buffer is freed via `ktav_free` after
  * the PHP side has copied the bytes out.
@@ -15,13 +15,18 @@ namespace Ktav;
 final class NativeLib
 {
     /** Version of `ktav_cabi` this build expects. Bump per release. */
-    public const LIB_VERSION = '0.6.0';
+    public const LIB_VERSION = '0.6.4';
 
     // PHP-FFI knows uint8_t / size_t as built-in types — no typedefs
     // needed. The previous `typedef unsigned long long size_t` was
     // also wrong on 32-bit platforms.
     private const CDEF = <<<'C'
         int ktav_loads(
+            const uint8_t *src, size_t src_len,
+            uint8_t **out_buf, size_t *out_len,
+            uint8_t **out_err, size_t *out_err_len);
+
+        int ktav_loads_strict(
             const uint8_t *src, size_t src_len,
             uint8_t **out_buf, size_t *out_len,
             uint8_t **out_err, size_t *out_err_len);

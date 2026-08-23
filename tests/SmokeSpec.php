@@ -43,6 +43,17 @@ describe('Ktav (smoke)', function () {
             expect($closure)->toThrow(new KtavException());
         });
 
+        it('supports strict numeric spelling checks', function () {
+            $lossy = function () {
+                Ktav::loadsStrict("version: 1.10\n");
+            };
+            expect($lossy)->toThrow(new KtavException());
+
+            $cfg = Ktav::loadsStrict("small: 1e-3\nlarge: 1e10\n");
+            expect($cfg['small'])->toBeCloseTo(0.001, 12);
+            expect($cfg['large'])->toBe(10000000000.0);
+        });
+
     });
 
     describe('::dumps', function () {

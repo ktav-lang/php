@@ -79,6 +79,7 @@ A complete runnable example lives in [`examples/basic.php`](examples/basic.php).
 | Method | Purpose |
 | --- | --- |
 | `Ktav::loads(string $src): mixed` | Parse a Ktav document. |
+| `Ktav::loadsStrict(string $src): mixed` | Parse with strict numeric spelling checks. |
 | `Ktav::dumps(array $value): string` | Render an associative array as Ktav text. |
 | `Ktav::nativeVersion(): string` | Version of the loaded `ktav_cabi`. |
 
@@ -103,7 +104,7 @@ wire between PHP and the native side.
 
 ## Key escaping
 
-Since spec 0.6.0 a literal `.` or `:` inside a key segment is written
+Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
 with a backslash:
 
 ```text

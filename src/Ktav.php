@@ -43,6 +43,18 @@ final class Ktav
     }
 
     /**
+     * Parse a Ktav document with strict numeric spelling checks.
+     *
+     * @throws KtavException on any strict parse error.
+     * @return mixed null|bool|int|float|string|array
+     */
+    public static function loadsStrict(string $src)
+    {
+        $bytes = NativeLib::callBytes('ktav_loads_strict', $src);
+        return WireJson::decode($bytes);
+    }
+
+    /**
      * Render a native PHP value back to Ktav text. Top-level value
      * must be an associative array (Object) or a sequential array
      * (top-level Array, spec § 5.0.1, since 0.1.1) — bare scalars at
