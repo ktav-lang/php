@@ -11,6 +11,22 @@ This changelog tracks **binding releases**, not changes to the Ktav format
 itself — for the latter see
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+### Changed
+
+- Tracks ktav 0.7.0 and spec 0.7.0: quoted keys (§ 5.3.3) and the
+  `\uXXXX` escape in inline values (§ 3.7.1) come from the Rust core
+  and are transparent across the FFI boundary — binding source
+  unchanged apart from the dependency bump. MSRV raised to Rust 1.71
+  (ktav 0.7's real MSRV); `[package.metadata.ktav] spec-version` is
+  now "0.7.0".
+- Conformance suite points at `spec/versions/0.7/tests` and now also
+  executes the two new 0.7 fixture categories: `unrepresentable/`
+  (the writer must refuse the fixture's value) and
+  `parseable-unrepresentable/` (parses fine; canonical emit must
+  refuse).
+
 ## 0.6.4 — 2026-08-23
 
 ### Added

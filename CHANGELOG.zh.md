@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### 变更
+
+- 跟踪 ktav 0.7.0 与 spec 0.7.0：带引号的键（§ 5.3.3）与 inline 值中的
+  `\uXXXX` 转义（§ 3.7.1）来自 Rust 内核，跨越 FFI 边界完全透明——
+  绑定源码除依赖升级外未改动。MSRV 提升至 Rust 1.71（ktav 0.7 的真实
+  MSRV）；`[package.metadata.ktav] spec-version` 现为 "0.7.0"。
+- 一致性测试套件指向 `spec/versions/0.7/tests`，并新增执行 0.7 的两个
+  fixture 类别：`unrepresentable/`（写入方必须拒绝 fixture 的值）与
+  `parseable-unrepresentable/`（可正常解析；规范输出必须拒绝）。
+
 ## 0.6.4 —— 2026-08-23
 
 ### 新增

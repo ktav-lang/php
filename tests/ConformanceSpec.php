@@ -120,6 +120,7 @@ describe('Ktav (conformance)', function () {
             });
         }
     });
+
     describe('unrepresentable fixtures', function () use ($translateFixtureValue) {
         $dir = TestPaths::spec() . '/unrepresentable';
         $cases = [];

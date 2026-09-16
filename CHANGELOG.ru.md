@@ -11,6 +11,22 @@
 формата Ktav — для последнего см.
 [`ktav-lang/spec`](https://github.com/ktav-lang/spec/blob/main/CHANGELOG.md).
 
+## Unreleased
+
+### Изменено
+
+- Binding отслеживает ktav 0.7.0 и spec 0.7.0: ключи в кавычках
+  (§ 5.3.3) и escape `\uXXXX` в inline-значениях (§ 3.7.1) приходят
+  из Rust-ядра и прозрачны для границы FFI — исходники биндинга не
+  менялись, кроме подъёма зависимости. MSRV поднят до Rust 1.71
+  (реальный MSRV ktav 0.7); `[package.metadata.ktav] spec-version`
+  теперь "0.7.0".
+- Конформный набор тестов указывает на `spec/versions/0.7/tests` и
+  теперь выполняет также две новые категории fixtures 0.7:
+  `unrepresentable/` (писатель обязан отвергнуть значение fixture) и
+  `parseable-unrepresentable/` (парсится; канонический вывод обязан
+  отказать).
+
 ## 0.6.4 — 2026-08-23
 
 ### Добавлено
