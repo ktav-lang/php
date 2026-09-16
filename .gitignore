@@ -28,3 +28,6 @@ Desktop.ini
 
 # Local agent/dev scratch
 /docs_local
+
+# /wrush task worktrees — always created here, in-tree
+/worktrees/
