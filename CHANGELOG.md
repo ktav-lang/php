@@ -27,6 +27,31 @@ itself — for the latter see
   `parseable-unrepresentable/` (parses fine; canonical emit must
   refuse).
 
+### Known limitations
+
+- **An empty Object and an empty Array are indistinguishable after
+  parsing.** PHP has a single `array` type for both compounds, and an
+  *empty* compound loses which one it was the moment `Ktav::loads()`
+  returns it:
+
+  ```php
+  Ktav::loads("a: {}\n");  // → ["a" => []]
+  Ktav::loads("a: []\n");  // → ["a" => []] — same value
+  ```
+
+  Written back, both come out as `a: []`. At the document root the
+  ambiguity resolves the other way: an empty PHP array is emitted as
+  an empty Object (`Ktav::dumps([])` → `{}`), so a top-level `[]`
+  document reads back and re-renders as `{}`. A configuration storing
+  `a: {}` and expecting `a: {}` back will observe `a: []`.
+
+  Non-empty compounds are unaffected — object vs array shape is
+  recoverable from key form. Fixing this requires representing
+  objects differently from lists on the PHP side (for example
+  decoding to `stdClass`), which is a breaking public-API change.
+  The conformance suite keeps the six affected fixtures as named,
+  skipped specs rather than silently relaxing their assertions.
+
 ## 0.6.4 — 2026-08-23
 
 ### Added
