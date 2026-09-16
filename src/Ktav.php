@@ -105,6 +105,26 @@ final class Ktav
     }
 
     /**
+     * Comment-preserving formatter over Ktav SOURCE TEXT (not a
+     * value-to-text renderer). Every comment is preserved verbatim
+     * (Ktav has no trailing comments — spec § 3.4, a comment owns a
+     * whole line, so attachment is unambiguous). Blank lines survive
+     * as a grouping hint but a run of two or more collapses to
+     * exactly one, and blank padding immediately inside a bracket is
+     * dropped, which makes the transform a fixed point
+     * (`format(format($src)) === format($src)`). Key order is never
+     * changed (canonical form has no sorting rule, spec § 5.9). For a
+     * document with no comments AND no blank lines the result equals
+     * `self::emitCanonical(self::loads($src))`.
+     *
+     * @throws KtavException on any format error.
+     */
+    public static function format(string $src): string
+    {
+        return NativeLib::callBytes('ktav_format', $src);
+    }
+
+    /**
      * Version string reported by the loaded `ktav_cabi`. Useful for
      * sanity checks against {@see ExpectedNativeVersion}.
      */

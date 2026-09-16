@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Ktav;
 
 /**
- * FFI binding to the `ktav_cabi` shared library. Seven functions, all
+ * FFI binding to the `ktav_cabi` shared library. Eight functions, all
  * using the canonical "caller-owned input pointer, callee-owned output
  * buffer" pattern. The output buffer is freed via `ktav_free` after
  * the PHP side has copied the bytes out.
@@ -46,6 +46,11 @@ final class NativeLib
             uint8_t **out_buf, size_t *out_len,
             uint8_t **out_err, size_t *out_err_len);
 
+        int ktav_format(
+            const uint8_t *src, size_t src_len,
+            uint8_t **out_buf, size_t *out_len,
+            uint8_t **out_err, size_t *out_err_len);
+
         void ktav_free(uint8_t *ptr, size_t len);
         const char *ktav_version();
         C;
@@ -78,8 +83,12 @@ final class NativeLib
     /**
      * Calls `ktav_loads` or `ktav_dumps`, copies the success buffer
      * into a PHP string, frees the native buffer, and returns the
-     * copy. Throws {@see KtavException} on non-zero return code with
-     * the native error string as the message.
+     * copy. On non-zero return code the native error bytes are
+     * decoded as the structured nine-field error envelope (see
+     * {@see KtavException::fromEnvelope()}); since 0.7.1 the envelope
+     * contract is: native errors are always this JSON object.
+     *
+     * @throws KtavException carrying the structured envelope
      */
     public static function callBytes(string $fn, string $input): string
     {
@@ -108,11 +117,17 @@ final class NativeLib
             );
 
             if ($rc !== 0) {
-                $msg = self::copyAndFree($outErr, (int) $outErrLen->cdata)
-                    ?: 'native call failed with code ' . $rc;
+                $payload = self::copyAndFree($outErr, (int) $outErrLen->cdata);
                 // Drain success buffer too (defence in depth).
                 self::freeIfPresent($outBuf, (int) $outLen->cdata);
-                throw new KtavException($msg);
+                // The envelope contract is: native errors are always
+                // this JSON object since 0.7.1. The fallback branch
+                // keeps old binaries / edge cases working.
+                $fields = $payload !== '' ? json_decode($payload, true) : null;
+                if (is_array($fields) && isset($fields['error']) && is_string($fields['error'])) {
+                    throw KtavException::fromEnvelope($fields);
+                }
+                throw new KtavException($payload !== '' ? $payload : 'native call failed with code ' . $rc);
             }
 
             // Drain error buffer (defence in depth).
