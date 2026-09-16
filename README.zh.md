@@ -81,9 +81,60 @@ $text = Ktav::dumps($doc);
 | `Ktav::loads(string $src): mixed` | 解析 Ktav 文档。 |
 | `Ktav::loadsStrict(string $src): mixed` | 使用严格数字词法检查解析文档。 |
 | `Ktav::dumps(array $value): string` | 将关联数组渲染为 Ktav 文本。 |
+| `Ktav::format(string $src): string` | 规范文档写法,同时保留注释。 |
 | `Ktav::nativeVersion(): string` | 已加载 `ktav_cabi` 的版本。 |
 
-解析 / 渲染出错时抛出 `KtavException`(消息为原生侧的 UTF-8 字符串)。
+### 格式化
+
+`Ktav::format()` 接受 Ktav **源文本**并返回 Ktav 源文本。它把结构规范到
+规范形式(§ 5.9),同时保留规范写入器会丢弃的附属内容:
+
+```php
+echo Ktav::format("## the server\nserver: {host: a, port: 80}\n");
+// ## the server
+// server: {
+//     host: a
+//     port: 80
+// }
+```
+
+每条注释都逐字保留 —— Ktav 没有行尾注释(§ 3.4:注释占据整行),因此
+归属毫无歧义。空行作为分组提示保留,但连续两行及以上会折叠为恰好一行,
+紧贴括号内侧的空行填充会被丢弃;正因如此该变换是不动点 —— 对已格式化的
+文本再次格式化不会有任何改变。键序永不改变:规范形式没有排序规则,而
+重排键只会让评审差异更糟。
+
+### 错误
+
+解析或渲染出错时抛出 `KtavException`。除了人类可读的 `getMessage()`,
+它还携带核心错误信封的九个结构化字段:
+
+```php
+try {
+    Ktav::loadsStrict("a: 1.10\n");
+} catch (KtavException $e) {
+    $e->getError();        // "LossyScalar"
+    $e->getBody();         // "1.10"      —— 书写形式
+    $e->getCanonical();    // "1.1"       —— 存储形式
+    $e->getSpecSection();  // "§3.6/§5.2"
+    $e->getSpan();         // ["start" => 0, "end" => 7]
+}
+```
+
+完整集合为 `getError()`、`getReason()`、`getErrorLine()`、
+`getLineText()`、`getSpan()`、`getPath()`、`getBody()`、
+`getCanonical()`、`getSpecSection()`。缺失的信息是 `null`,而不是缺少
+访问器,因此调用方无需先判断错误类别即可读取任一字段。
+
+`getPath()` 是**精确解码后的键段数组,绝不是拼接字符串**:字面名为
+`a.b` 的键是一个段,不会与两段路径混淆。
+
+写入器的两种拒绝分别命名:能指出出错节点时为 `"UnrepresentableAt"`
+(此时也会填充 `getPath()`),不能指出时为 `"Unrepresentable"`。两者的
+原因码相同,因此若只需知道「写入被拒绝」,匹配 `getReason()` 就够了。
+
+使用 `getErrorLine()` 而非 `getLine()`,因为 PHP 的
+`Exception::getLine()` 被声明为 `final`。
 
 ## 类型映射
 

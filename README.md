@@ -81,10 +81,68 @@ A complete runnable example lives in [`examples/basic.php`](examples/basic.php).
 | `Ktav::loads(string $src): mixed` | Parse a Ktav document. |
 | `Ktav::loadsStrict(string $src): mixed` | Parse with strict numeric spelling checks. |
 | `Ktav::dumps(array $value): string` | Render an associative array as Ktav text. |
+| `Ktav::format(string $src): string` | Normalise a document's spelling, keeping comments. |
 | `Ktav::nativeVersion(): string` | Version of the loaded `ktav_cabi`. |
 
-`KtavException` is thrown on any parse / render failure; the message is
-the UTF-8 string produced by the native parser.
+### Formatting
+
+`Ktav::format()` takes Ktav **source text** and returns Ktav source
+text. It normalises structure to canonical form (§ 5.9) while keeping
+the trivia the canonical writer drops:
+
+```php
+echo Ktav::format("## the server\nserver: {host: a, port: 80}\n");
+// ## the server
+// server: {
+//     host: a
+//     port: 80
+// }
+```
+
+Every comment survives verbatim — Ktav has no trailing comments (§ 3.4:
+a comment owns a whole line), so attachment is unambiguous. Blank lines
+survive as a grouping hint, but a run of two or more collapses to
+exactly one and blank padding just inside a bracket is dropped, which
+makes the transform a fixed point: formatting already-formatted text
+changes nothing. Key order is never changed — canonical form has no
+sorting rule, and reordering keys would make review diffs worse.
+
+### Errors
+
+`KtavException` is thrown on any parse or render failure. Beyond a
+human-readable `getMessage()`, it carries the nine structured fields of
+the core's error envelope:
+
+```php
+try {
+    Ktav::loadsStrict("a: 1.10\n");
+} catch (KtavException $e) {
+    $e->getError();        // "LossyScalar"
+    $e->getBody();         // "1.10"      — as written
+    $e->getCanonical();    // "1.1"       — as it would be stored
+    $e->getSpecSection();  // "§3.6/§5.2"
+    $e->getSpan();         // ["start" => 0, "end" => 7]
+}
+```
+
+The full set is `getError()`, `getReason()`, `getErrorLine()`,
+`getLineText()`, `getSpan()`, `getPath()`, `getBody()`,
+`getCanonical()`, `getSpecSection()`. Absent information is `null`,
+never a missing accessor, so a caller can read any field without
+checking the error class first.
+
+`getPath()` is an **array of exact decoded key segments, never a joined
+string**: a key literally named `a.b` is one segment and cannot be
+confused with a two-segment path.
+
+Two writer rejections are named apart — `"UnrepresentableAt"` when the
+writer can say which node is at fault (it fills `getPath()` too), and
+`"Unrepresentable"` when it cannot. The `reason` code is the same in
+both, so matching on `getReason()` is enough when you only need to know
+that a write was refused.
+
+`getErrorLine()` rather than `getLine()`, because PHP declares
+`Exception::getLine()` `final`.
 
 ## Type mapping
 

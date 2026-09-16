@@ -13,7 +13,77 @@ itself — for the latter see
 
 ## Unreleased
 
+### Added
+
+- **`Ktav::format(string $src): string`** — a comment-preserving
+  formatter over Ktav *source text*, not a value-to-text renderer. It
+  normalises the document's structural spelling to canonical form
+  (§ 5.9) while keeping the trivia the canonical writer drops. Every
+  comment survives verbatim; Ktav has no trailing comments (§ 3.4: a
+  comment owns a whole line), so attachment is unambiguous. Blank lines
+  survive as a grouping hint, but a run of two or more collapses to
+  exactly one and blank padding immediately inside a bracket is
+  dropped — which is what makes the transform a fixed point:
+  `Ktav::format(Ktav::format($s)) === Ktav::format($s)`. Key order is
+  never changed (canonical form has no sorting rule). For a document
+  with no comments *and no blank lines* the result equals
+  `Ktav::emitCanonical(Ktav::loads($src))`; the stronger condition is
+  deliberate, since blank lines are no more part of the value model
+  than comments are.
+
+  ```php
+  Ktav::format("## the server\nserver: {host: a, port: 80}\n");
+  // ## the server
+  // server: {
+  //     host: a
+  //     port: 80
+  // }
+  ```
+
+- **`KtavException` now carries the nine structured error fields** from
+  the Rust core's error envelope: `getError()`, `getReason()`,
+  `getErrorLine()`, `getLineText()`, `getSpan()`, `getPath()`,
+  `getBody()`, `getCanonical()`, `getSpecSection()`. Absent information
+  is `null`, never a missing accessor.
+
+  `getPath()` returns an **array of exact decoded key segments, never a
+  joined string** — a key literally named `a.b` is one segment and
+  cannot be confused with a two-segment path.
+
+  ```php
+  try {
+      Ktav::loadsStrict("a: 1.10\n");
+  } catch (KtavException $e) {
+      $e->getError();        // "LossyScalar"
+      $e->getBody();         // "1.10"
+      $e->getCanonical();    // "1.1"
+      $e->getSpecSection();  // "§3.6/§5.2"
+  }
+  ```
+
+  The envelope names the two writer rejections apart:
+  `"UnrepresentableAt"` when the writer can say where the offending
+  node is (it also fills `getPath()`), `"Unrepresentable"` when it
+  cannot. The `reason` code is identical in both, so a caller that only
+  needs "the write was refused" matches on `getReason()`.
+
+  `getErrorLine()` rather than `getLine()` because PHP's
+  `Exception::getLine()` is `final`.
+
 ### Changed
+
+- **Error messages have changed.** They are now reconstructed from the
+  envelope's fields rather than passed through from the core's
+  `Display` output. Callers matching on message strings will need to
+  match on `getError()` / `getReason()` instead — which is the point of
+  the change. `getMessage()` remains human-readable and is never the
+  raw JSON.
+
+- Minimum `ktav` core raised to **0.7.1**: `format_str` and
+  `ErrorEnvelope` do not exist before it. In Cargo terms the
+  requirement is `>=0.7.1, <0.8.0` — the floor rises, the ceiling stays
+  inside 0.7.x.
+
 
 - Tracks ktav 0.7.0 and spec 0.7.0: quoted keys (§ 5.3.3) and the
   `\uXXXX` escape in inline values (§ 3.7.1) come from the Rust core

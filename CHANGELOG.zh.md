@@ -2,7 +2,66 @@
 
 ## Unreleased
 
+### 新增
+
+- **`Ktav::format(string $src): string`** —— 保留注释的格式化器,处理
+  Ktav **源文本**,而不是把值渲染成文本。它把文档的结构写法规范到规范
+  形式(§ 5.9),同时保留规范写入器会丢弃的附属内容。每条注释都逐字
+  保留:Ktav 没有行尾注释(§ 3.4,注释占据整行),因此归属毫无歧义。
+  空行作为分组提示保留,但连续两行及以上会折叠为恰好一行,紧贴括号内侧
+  的空行填充会被丢弃 —— 正是这一点让该变换成为不动点:
+  `Ktav::format(Ktav::format($s)) === Ktav::format($s)`。键序永不改变
+  (规范形式没有排序规则)。对于既无注释**也无空行**的文档,结果等于
+  `Ktav::emitCanonical(Ktav::loads($src))`;这个更强的条件是刻意的,
+  因为空行与注释一样都不属于值模型。
+
+  ```php
+  Ktav::format("## the server\nserver: {host: a, port: 80}\n");
+  // ## the server
+  // server: {
+  //     host: a
+  //     port: 80
+  // }
+  ```
+
+- **`KtavException` 现在携带错误信封的九个结构化字段**,来自 Rust 核心:
+  `getError()`、`getReason()`、`getErrorLine()`、`getLineText()`、
+  `getSpan()`、`getPath()`、`getBody()`、`getCanonical()`、
+  `getSpecSection()`。缺失的信息是 `null`,而不是缺少访问器。
+
+  `getPath()` 返回**精确解码后的键段数组,绝不是拼接字符串**:字面名为
+  `a.b` 的键是一个段,不会与两段路径混淆。
+
+  ```php
+  try {
+      Ktav::loadsStrict("a: 1.10\n");
+  } catch (KtavException $e) {
+      $e->getError();        // "LossyScalar"
+      $e->getBody();         // "1.10"
+      $e->getCanonical();    // "1.1"
+      $e->getSpecSection();  // "§3.6/§5.2"
+  }
+  ```
+
+  信封把写入器的两种拒绝分别命名:能指出出错节点时为
+  `"UnrepresentableAt"`(此时也会填充 `getPath()`),不能指出时为
+  `"Unrepresentable"`。两者的原因码相同,因此只需知道「写入被拒绝」的
+  调用方匹配 `getReason()` 即可。
+
+  使用 `getErrorLine()` 而非 `getLine()`,因为 PHP 的
+  `Exception::getLine()` 被声明为 `final`。
+
 ### 变更
+
+- **错误消息文本已改变。** 它们现在由信封的字段重建,而不是从核心的
+  `Display` 输出透传。依赖消息字符串匹配的调用方需要改用
+  `getError()` / `getReason()` —— 这正是本次改动的目的。
+  `getMessage()` 仍然是人类可读的,绝不会是原始 JSON。
+
+- `ktav` 核心的最低版本提升至 **0.7.1**:在此之前不存在 `format_str`
+  与 `ErrorEnvelope`。以 Cargo 的语义表达即 `>=0.7.1, <0.8.0` —— 下限
+  上移,上限仍在 0.7.x 之内。
+
 
 - 跟踪 ktav 0.7.0 与 spec 0.7.0：带引号的键（§ 5.3.3）与 inline 值中的
   `\uXXXX` 转义（§ 3.7.1）来自 Rust 内核，跨越 FFI 边界完全透明——
