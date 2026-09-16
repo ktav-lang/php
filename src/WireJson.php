@@ -99,10 +99,12 @@ final class WireJson
             if (!is_finite($v)) {
                 throw new KtavException('Ktav floats must be finite (got ' . $v . ')');
             }
-            // PHP's default float-to-string is locale-independent and
-            // round-trip-safe via `serialize_precision = -1` (default
-            // since PHP 7.1). Force a decimal point if missing.
-            $s = (string) $v;
+            // `(string) $v` is governed by the `precision` ini setting
+            // (default 14 significant digits) and is lossy. `json_encode`
+            // is governed by `serialize_precision` (default -1, shortest
+            // round-trip form) — that's the one that's actually safe.
+            // Force a decimal point if missing.
+            $s = (string) json_encode($v);
             if (strpos($s, '.') === false && strpos($s, 'e') === false && strpos($s, 'E') === false) {
                 $s .= '.0';
             }
