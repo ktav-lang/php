@@ -50,6 +50,29 @@ describe('Ktav (conformance)', function () {
         return $a === $b;
     };
 
+    /**
+     * Translate a fixture JSON value into the PHP/wire representation:
+     * objects → assoc arrays, arrays → lists, numbers → int/float (json_decode
+     * assoc already does this). In `unrepresentable/` only, the non-finite
+     * float sentinel `{"$float": "NaN"|"Infinity"|"-Infinity"}` maps to our
+     * cabi wire key `"$f"`.
+     */
+    $translateFixtureValue = function ($v) use (&$translateFixtureValue) {
+        if (is_array($v)) {
+            $isList = array_keys($v) === range(0, count($v) - 1);
+            $out = [];
+            foreach ($v as $k => $sub) {
+                if (!$isList && $k === '$float' && is_string($sub)) {
+                    $out['$f'] = $sub;
+                } else {
+                    $out[$k] = $translateFixtureValue($sub);
+                }
+            }
+            return $out;
+        }
+        return $v;
+    };
+
     beforeAll(function () {
         TestPaths::init();
         if (!TestPaths::cabiBuilt()) {
@@ -94,6 +117,65 @@ describe('Ktav (conformance)', function () {
                     Ktav::loads($src);
                 };
                 expect($closure)->toThrow(new KtavException());
+            });
+        }
+    });
+    describe('unrepresentable fixtures', function () use ($translateFixtureValue) {
+        $dir = TestPaths::spec() . '/unrepresentable';
+        $cases = [];
+        if (is_dir($dir)) {
+            foreach (glob($dir . '/*.json') ?: [] as $abs) {
+                $cases[basename($abs)] = $abs;
+            }
+            ksort($cases);
+        }
+
+        foreach ($cases as $rel => $abs) {
+            it($rel, function () use ($abs, $translateFixtureValue) {
+                $fixture = json_decode(
+                    (string) file_get_contents($abs),
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                );
+                $v = $translateFixtureValue($fixture['value']);
+
+                $dumps = function () use ($v) {
+                    Ktav::dumps($v);
+                };
+                expect($dumps)->toThrow(new KtavException());
+
+                $canonical = function () use ($v) {
+                    Ktav::emitCanonical($v);
+                };
+                expect($canonical)->toThrow(new KtavException());
+            });
+        }
+    });
+
+    describe('parseable-unrepresentable fixtures', function () use ($walkKtav, $equals) {
+        $cases = $walkKtav(TestPaths::spec() . '/parseable-unrepresentable');
+
+        foreach ($cases as $rel => $abs) {
+            it($rel, function () use ($abs, $equals) {
+                $oraclePath = substr($abs, 0, -5) . '.json';
+                expect(file_exists($oraclePath))->toBe(true);
+
+                $src = (string) file_get_contents($abs);
+                $oracle = json_decode(
+                    (string) file_get_contents($oraclePath),
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                );
+
+                $loaded = Ktav::loads($src);
+                expect($equals($oracle['value'], $loaded))->toBe(true);
+
+                $canonical = function () use ($loaded) {
+                    Ktav::emitCanonical($loaded);
+                };
+                expect($canonical)->toThrow(new KtavException());
             });
         }
     });

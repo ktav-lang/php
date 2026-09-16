@@ -146,6 +146,40 @@ describe('Ktav (smoke)', function () {
 
     });
 
+    describe('quoted keys (spec § 5.3.3)', function () {
+
+        it('parses a double-quoted key', function () {
+            $cfg = Ktav::loads("\"cache:redis\": enabled\n");
+            expect($cfg)->toBe(['cache:redis' => 'enabled']);
+        });
+
+        it('parses a single-quoted key containing double quotes', function () {
+            $cfg = Ktav::loads("'say \"hi\": now': ok\n");
+            expect($cfg)->toBe(['say "hi": now' => 'ok']);
+        });
+
+        it('round-trips a quoted key through dumps/loads', function () {
+            $doc = ['cache:redis' => 'enabled'];
+            $back = Ktav::loads(Ktav::dumps($doc));
+            expect($back)->toBe($doc);
+        });
+
+    });
+
+    describe('unicode escapes (spec § 3.7.1)', function () {
+
+        it('decodes a \\uXXXX escape in an inline value', function () {
+            $cfg = Ktav::loads('msg: [hello\u0021]' . "\n");
+            expect($cfg['msg'])->toBe(['hello!']);
+        });
+
+        it('requires exactly four hex digits', function () {
+            $cfg = Ktav::loads('s: [\u00411]' . "\n");
+            expect($cfg['s'])->toBe(['A1']);
+        });
+
+    });
+
     describe('arbitrary-precision integers', function () {
 
         it('round-trips digits beyond PHP_INT_MAX', function () {
