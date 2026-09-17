@@ -230,20 +230,13 @@ pub unsafe extern "C" fn ktav_dumps(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            return emit_envelope(
-                &ktav::Error::Message(e),
-                "",
-                out_err,
-                out_err_len,
-            );
+            return emit_envelope(&ktav::Error::Message(e), "", out_err, out_err_len);
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
         return emit_envelope(
-            &ktav::Error::Message(
-                "top-level Ktav document must be an object or array".to_string(),
-            ),
+            &ktav::Error::Message("top-level Ktav document must be an object or array".to_string()),
             "",
             out_err,
             out_err_len,
@@ -297,20 +290,13 @@ pub unsafe extern "C" fn ktav_dumps_force_strings(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            return emit_envelope(
-                &ktav::Error::Message(e),
-                "",
-                out_err,
-                out_err_len,
-            );
+            return emit_envelope(&ktav::Error::Message(e), "", out_err, out_err_len);
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
         return emit_envelope(
-            &ktav::Error::Message(
-                "top-level Ktav document must be an object or array".to_string(),
-            ),
+            &ktav::Error::Message("top-level Ktav document must be an object or array".to_string()),
             "",
             out_err,
             out_err_len,
@@ -362,20 +348,13 @@ pub unsafe extern "C" fn ktav_emit_canonical(
     let value = match wire.into_value() {
         Ok(v) => v,
         Err(e) => {
-            return emit_envelope(
-                &ktav::Error::Message(e),
-                "",
-                out_err,
-                out_err_len,
-            );
+            return emit_envelope(&ktav::Error::Message(e), "", out_err, out_err_len);
         }
     };
 
     if !matches!(value, Value::Object(_) | Value::Array(_)) {
         return emit_envelope(
-            &ktav::Error::Message(
-                "top-level Ktav document must be an object or array".to_string(),
-            ),
+            &ktav::Error::Message("top-level Ktav document must be an object or array".to_string()),
             "",
             out_err,
             out_err_len,
