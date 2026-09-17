@@ -5,7 +5,7 @@
 ![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue?style=flat-square)
 [![Playground](https://img.shields.io/badge/playground-try%20online-7c3aed?style=flat-square&logo=rocket&logoColor=white)](https://ktav-lang.github.io/)
 
-**Languages:** [English](README.md) · [Русский](README.ru.md) · **简体中文**
+**Languages:** [English](../../README.md) · [Русский](../ru/README.ru.md) · **简体中文**
 
 **演练场：** 在浏览器中互转 JSON / YAML / TOML / INI ⇄ Ktav — **[ktav-lang.github.io](https://ktav-lang.github.io/)**。
 
@@ -72,7 +72,7 @@ $doc = [
 $text = Ktav::dumps($doc);
 ```
 
-完整可运行示例:[`examples/basic.php`](examples/basic.php)。
+完整可运行示例:[`examples/basic.php`](../../examples/basic.php)。
 
 ## API
 
@@ -186,7 +186,7 @@ x.y\.z: v      # 只按第一个点切分        → ["x" => ["y.z" => "v"]]
 
 ## 许可证
 
-MIT OR Apache-2.0 —— 见 [LICENSE-MIT](LICENSE-MIT) 和 [LICENSE-APACHE](LICENSE-APACHE)。
+MIT OR Apache-2.0 —— 见 [LICENSE-MIT](../../LICENSE-MIT) 和 [LICENSE-APACHE](../../LICENSE-APACHE)。
 
 ## 其他 Ktav 实现
 

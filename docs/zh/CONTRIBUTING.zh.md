@@ -1,6 +1,6 @@
 # 为 ktav(Java)做贡献
 
-**语言:** [English](CONTRIBUTING.md) · [Русский](CONTRIBUTING.ru.md) · **简体中文**
+**语言:** [English](../CONTRIBUTING.md) · [Русский](../ru/CONTRIBUTING.ru.md) · **简体中文**
 
 ## 核心规则
 

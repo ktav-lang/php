@@ -1,6 +1,6 @@
 # Как участвовать в ktav (Java)
 
-**Языки:** [English](CONTRIBUTING.md) · **Русский** · [简体中文](CONTRIBUTING.zh.md)
+**Языки:** [English](../CONTRIBUTING.md) · **Русский** · [简体中文](../zh/CONTRIBUTING.zh.md)
 
 ## Основные правила
 
