@@ -81,8 +81,17 @@ A complete runnable example lives in [`examples/basic.php`](examples/basic.php).
 | `Ktav::loads(string $src): mixed` | Parse a Ktav document. |
 | `Ktav::loadsStrict(string $src): mixed` | Parse with strict numeric spelling checks. |
 | `Ktav::dumps(array $value): string` | Render an associative array as Ktav text. |
+| `Ktav::dumpsForceStrings(array $value): string` | Render like `dumps`, but coerce every leaf scalar to a String. |
+| `Ktav::emitCanonical(array $value): string` | Render a value as deterministic canonical form. |
 | `Ktav::format(string $src): string` | Normalise a document's spelling, keeping comments. |
+| `Ktav::canonicalFromSource(string $src): string` | Parse and re-emit as canonical Ktav in one call — `emitCanonical(loads($src))` with no intermediate value. Drops comments and blank lines like `emitCanonical` does. |
 | `Ktav::nativeVersion(): string` | Version of the loaded `ktav_cabi`. |
+
+`dumpsForceStrings` flattens integers, floats, booleans and `null` to
+their textual form via the raw marker (`::`); objects and arrays keep
+their structure, since only leaves are coerced. The result parses back
+through `loads` as the same set of String scalars — useful when a
+downstream consumer does not understand typed markers.
 
 ### Formatting
 

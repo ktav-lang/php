@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Ktav;
 
 /**
- * FFI binding to the `ktav_cabi` shared library. Eight functions, all
+ * FFI binding to the `ktav_cabi` shared library. Nine functions, all
  * using the canonical "caller-owned input pointer, callee-owned output
  * buffer" pattern. The output buffer is freed via `ktav_free` after
  * the PHP side has copied the bytes out.
@@ -47,6 +47,11 @@ final class NativeLib
             uint8_t **out_err, size_t *out_err_len);
 
         int ktav_format(
+            const uint8_t *src, size_t src_len,
+            uint8_t **out_buf, size_t *out_len,
+            uint8_t **out_err, size_t *out_err_len);
+
+        int ktav_canonical_from_source(
             const uint8_t *src, size_t src_len,
             uint8_t **out_buf, size_t *out_len,
             uint8_t **out_err, size_t *out_err_len);

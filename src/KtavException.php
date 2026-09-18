@@ -5,10 +5,14 @@ declare(strict_types=1);
 namespace Ktav;
 
 /**
- * Thrown on native failure. Carries the nine-field structured error
- * envelope (issue rust#12) as first-class accessors; getMessage()
- * stays human-readable, reconstructed from the envelope fields —
- * never the raw JSON.
+ * Thrown on native failure. Carries the nine other structured error
+ * envelope fields (issue rust#12) as first-class accessors. Since
+ * ktav 0.7.2, getMessage() is the envelope's own `message` field,
+ * taken verbatim — never the raw JSON, and never reassembled from the
+ * other fields (a reassembled sentence didn't match what every other
+ * Ktav binding prints for the same error). Against a native library
+ * built before 0.7.2, which never wrote `message`, this falls back to
+ * a locally-built sentence.
  *
  * Envelope field `line` -> getErrorLine(); PHP's final
  * Exception::getLine() keeps its native meaning (the PHP throw site).
@@ -101,20 +105,34 @@ final class KtavException extends \RuntimeException
             }
         }
 
-        $message = 'Ktav ' . $error;
-        if ($reason !== null) {
-            $message .= ' [' . $reason . ']';
-        }
-        if ($line !== null) {
-            $message .= ' on line ' . $line;
-        }
-        if (is_string($body) && $body !== '') {
-            $message .= ': ' . $body;
-        } elseif (is_string($lineText) && $lineText !== '') {
-            $message .= ': ' . $lineText;
-        }
-        if ($path !== null && $path !== []) {
-            $message .= ' (path: ' . implode('.', $path) . ')';
+        $coreMessage = isset($fields['message']) && is_string($fields['message']) && $fields['message'] !== ''
+            ? $fields['message']
+            : null;
+
+        if ($coreMessage !== null) {
+            // Since ktav 0.7.2: the core's own Display rendering, taken
+            // verbatim. Replaces the reconstruction below, which this
+            // binding used to always build even though 0.7.2 makes it
+            // unnecessary.
+            $message = $coreMessage;
+        } else {
+            // Fallback against a pre-0.7.2 native library, which never
+            // wrote `message`.
+            $message = 'Ktav ' . $error;
+            if ($reason !== null) {
+                $message .= ' [' . $reason . ']';
+            }
+            if ($line !== null) {
+                $message .= ' on line ' . $line;
+            }
+            if (is_string($body) && $body !== '') {
+                $message .= ': ' . $body;
+            } elseif (is_string($lineText) && $lineText !== '') {
+                $message .= ': ' . $lineText;
+            }
+            if ($path !== null && $path !== []) {
+                $message .= ' (path: ' . implode('.', $path) . ')';
+            }
         }
 
         $e = new self($message);

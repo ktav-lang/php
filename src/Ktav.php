@@ -125,6 +125,24 @@ final class Ktav
     }
 
     /**
+     * Parse Ktav source text and immediately re-emit it in canonical
+     * form (spec § 5.9), preserving the source's insertion order of
+     * object keys. Equivalent to `self::emitCanonical(self::loads($src))`,
+     * but with no intermediate PHP value: one native call instead of
+     * two, and no round-trip through the `{"$i":"…"}` / `{"$f":"…"}`
+     * JSON wire tags in between.
+     *
+     * Comments and blank lines do NOT survive — canonical form carries
+     * no trivia; use {@see format} for that.
+     *
+     * @throws KtavException on any parse or render error.
+     */
+    public static function canonicalFromSource(string $src): string
+    {
+        return NativeLib::callBytes('ktav_canonical_from_source', $src);
+    }
+
+    /**
      * Version string reported by the loaded `ktav_cabi`. Useful for
      * sanity checks against {@see ExpectedNativeVersion}.
      */

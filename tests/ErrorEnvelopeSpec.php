@@ -33,7 +33,14 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getBody())->toBe('1.10');
         expect($thrown->getCanonical())->toBe('1.1');
         expect($thrown->getSpecSection())->toBe('§3.6/§5.2');
-        expect($thrown->getMessage())->toBe('Ktav LossyScalar on line 1: 1.10');
+        // Since ktav 0.7.2: the core's own Display rendering, taken
+        // verbatim — no longer this binding's old "Ktav <class> ..."
+        // reconstruction (task #303).
+        expect($thrown->getMessage())->toBe(
+            "Syntax error: Line 1: LossyScalar: '1.10' would be inferred as a number "
+            . "and silently canonicalised to '1.1'; append '::' to keep it a String "
+            . 'or write the canonical form'
+        );
 
         // Never raw JSON.
         expect(strpos($thrown->getMessage(), '{') !== 0)->toBe(true);
@@ -52,7 +59,10 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getReason())->toBe('NonFiniteFloat');
         expect($thrown->getPath())->toBe(['srv', 'port']);
         expect($thrown->getSpan())->toBeNull();
-        expect($thrown->getMessage())->toBe('Ktav UnrepresentableAt [NonFiniteFloat] (path: srv.port)');
+        // Since ktav 0.7.2: the core's own Display rendering, verbatim.
+        expect($thrown->getMessage())->toBe(
+            'NonFiniteFloat: a Float is NaN or ±Infinity (spec § 5.9.0) at ["srv", "port"]'
+        );
     });
 
     it('syntax error surfaces a class name, not a plain string', function () {
@@ -82,7 +92,11 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getError())->toBe('Message');
         expect($thrown->getReason())->toBeNull();
         expect($thrown->getErrorLine())->toBeNull();
-        expect($thrown->getMessage())->toBe('Ktav Message');
+        // Since ktav 0.7.2: the core's own Display rendering, verbatim —
+        // no longer this binding's old "Ktav Message" reconstruction.
+        expect($thrown->getMessage())->toBe(
+            'input is not valid UTF-8: invalid utf-8 sequence of 1 bytes from index 0'
+        );
     });
 
     it('PHP-side throws carry null envelope fields', function () {

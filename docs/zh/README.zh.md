@@ -81,8 +81,16 @@ $text = Ktav::dumps($doc);
 | `Ktav::loads(string $src): mixed` | 解析 Ktav 文档。 |
 | `Ktav::loadsStrict(string $src): mixed` | 使用严格数字词法检查解析文档。 |
 | `Ktav::dumps(array $value): string` | 将关联数组渲染为 Ktav 文本。 |
+| `Ktav::dumpsForceStrings(array $value): string` | 输出与 `dumps` 相同，但把每个叶子标量强制为 String。 |
+| `Ktav::emitCanonical(array $value): string` | 将值渲染为确定性的规范形式。 |
 | `Ktav::format(string $src): string` | 规范文档写法,同时保留注释。 |
+| `Ktav::canonicalFromSource(string $src): string` | 一次调用完成解析并重新输出为规范 Ktav —— 相当于 `emitCanonical(loads($src))`,但中间没有值。像 `emitCanonical` 一样丢弃注释与空行。 |
 | `Ktav::nativeVersion(): string` | 已加载 `ktav_cabi` 的版本。 |
+
+`dumpsForceStrings` 把整数、float、布尔与 `null` 用原始标记(`::`)压平
+为它们的文本形式；对象与数组保持自身结构，因为只有叶子会被强制。结果
+经由 `loads` 解析回来仍是同一组 String 标量 —— 当下游消费方不理解类型
+标记时，这很有用。
 
 ### 格式化
 

@@ -81,8 +81,17 @@ $text = Ktav::dumps($doc);
 | `Ktav::loads(string $src): mixed` | Разобрать Ktav-документ. |
 | `Ktav::loadsStrict(string $src): mixed` | Разобрать документ со строгой проверкой записи чисел. |
 | `Ktav::dumps(array $value): string` | Отрендерить ассоциативный массив в Ktav. |
+| `Ktav::dumpsForceStrings(array $value): string` | Отрендерить как `dumps`, но привести каждый leaf-скаляр к String. |
+| `Ktav::emitCanonical(array $value): string` | Отрендерить значение в детерминированной канонической форме. |
 | `Ktav::format(string $src): string` | Нормализует написание документа, сохраняя комментарии. |
+| `Ktav::canonicalFromSource(string $src): string` | Разобрать и заново вывести как канонический Ktav за один вызов — `emitCanonical(loads($src))` без промежуточного значения. Комментарии и пустые строки отбрасывает так же, как `emitCanonical`. |
 | `Ktav::nativeVersion(): string` | Версия загруженного `ktav_cabi`. |
+
+`dumpsForceStrings` расплющивает целые, float, булевы и `null` в их
+текстовую форму через сырой маркер (`::`); объекты и массивы сохраняют
+структуру, потому что приводятся только листья. Результат разбирается
+обратно через `loads` как тот же набор String-скаляров — полезно, когда
+потребитель на выходе не понимает типизированных маркеров.
 
 ### Форматирование
 
