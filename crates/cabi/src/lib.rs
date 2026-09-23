@@ -881,7 +881,10 @@ mod tests {
         let twice = call(ktav_format, once.as_bytes()).expect("re-format succeeds");
         assert_eq!(once, twice, "format must be a fixed point");
         assert!(once.contains("## a verbatim body"));
-        assert!(once.contains("line one  "), "verbatim body must preserve trailing whitespace verbatim");
+        assert!(
+            once.contains("line one  "),
+            "verbatim body must preserve trailing whitespace verbatim"
+        );
     }
 
     /// Task #311: this symbol was declare_cabi!'s to have from the start,
@@ -915,7 +918,10 @@ mod tests {
         let out = call(ktav_canonical_from_source, b"## c\na: 1\n\n\nb: 2\n")
             .expect("canonical_from_source succeeds");
         assert!(!out.contains("##"), "comment must not survive: {out:?}");
-        assert!(!out.contains("\n\n"), "blank line must not survive: {out:?}");
+        assert!(
+            !out.contains("\n\n"),
+            "blank line must not survive: {out:?}"
+        );
     }
 
     #[test]
