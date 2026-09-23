@@ -248,4 +248,38 @@ describe('Ktav (conformance)', function () {
         }
     });
 
+    // Spec § 8.1 strict-lossy/: loads() accepts and yields lax_value;
+    // loadsStrict() refuses with LossyScalar naming the exact body/canonical.
+    describe('strict-lossy fixtures', function () use ($walkKtav, $equals) {
+        $cases = $walkKtav(TestPaths::spec() . '/strict-lossy');
+
+        foreach ($cases as $rel => $abs) {
+            it($rel, function () use ($abs, $equals) {
+                $oraclePath = substr($abs, 0, -5) . '.json';
+                expect(file_exists($oraclePath))->toBe(true);
+
+                $src = (string) file_get_contents($abs);
+                $oracle = json_decode(
+                    (string) file_get_contents($oraclePath),
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING,
+                );
+
+                expect($equals($oracle['lax_value'], Ktav::loads($src)))->toBe(true);
+
+                $caught = null;
+                try {
+                    Ktav::loadsStrict($src);
+                } catch (KtavException $e) {
+                    $caught = $e;
+                }
+                expect($caught)->not->toBeNull();
+                expect($caught->getError())->toBe($oracle['expected_error']);
+                expect($caught->getBody())->toBe($oracle['body']);
+                expect($caught->getCanonical())->toBe($oracle['canonical']);
+            });
+        }
+    });
+
 });

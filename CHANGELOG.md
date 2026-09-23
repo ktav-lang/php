@@ -84,6 +84,15 @@ itself — for the latter see
   requirement is `>=0.7.1, <0.8.0` — the floor rises, the ceiling stays
   inside 0.7.x.
 
+- Migrated `crates/cabi` to a single `ktav::declare_cabi!()` invocation
+  (ktav's `cabi` feature) instead of a hand-rolled C ABI shim; the
+  exported symbol surface is unchanged, so the PHP API is unaffected.
+  Dependency floor raised to **0.8.0**, spec submodule re-pinned to
+  `v0.8.0` (adds § 5.2: a decimal with a redundant leading zero parses
+  as a String, not an Integer).
+- The package version moves to **0.8.0**, in step with the core and the
+  specification; the prebuilt-library download fallback now targets the
+  `v0.8.0` release asset.
 
 - Tracks ktav 0.7.0 and spec 0.7.0: quoted keys (§ 5.3.3) and the
   `\uXXXX` escape in inline values (§ 3.7.1) come from the Rust core
@@ -91,11 +100,17 @@ itself — for the latter see
   unchanged apart from the dependency bump. MSRV raised to Rust 1.71
   (ktav 0.7's real MSRV); `[package.metadata.ktav] spec-version` is
   now "0.7.0".
-- Conformance suite points at `spec/versions/0.7/tests` and now also
-  executes the two new 0.7 fixture categories: `unrepresentable/`
-  (the writer must refuse the fixture's value) and
-  `parseable-unrepresentable/` (parses fine; canonical emit must
-  refuse).
+- Conformance suite points at `spec/versions/0.8/tests` (it silently
+  kept reading the stale `0.7` corpus after the submodule was
+  re-pinned to `0.8.0` — the path was hardcoded, not derived from the
+  pin) and executes every fixture category the corpus ships:
+  `unrepresentable/` and `parseable-unrepresentable/` (the writer must
+  refuse the fixture's value / a parseable value the canonical emit
+  must refuse) and the new `strict-lossy/` (`loads()` must equal the
+  lax value, `loadsStrict()` must throw with the matching reason, body
+  and canonical form). A guard test fails the build if an unrecognized
+  category directory appears under the corpus, so a future addition
+  can't repeat this silently.
 
 ### Known limitations
 

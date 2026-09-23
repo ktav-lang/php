@@ -166,7 +166,7 @@ describe('README claims', function () {
         });
 
         it('tolerates an envelope field it does not know', function () {
-            // 0.7.2 appended `message` to the nine-field envelope. php reads
+            // 0.8.0 appended `message` to the nine-field envelope. php reads
             // fields by key, so a tenth field cannot break the other nine —
             // java parsed positionally and DID break (see task #303).
             $thrown = null;

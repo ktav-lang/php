@@ -46,7 +46,17 @@ describe('spec corpus (population guard)', function () {
         return $n;
     };
 
-    $categories = ['valid', 'invalid', 'unrepresentable', 'parseable-unrepresentable'];
+    $categories = ['valid', 'invalid', 'unrepresentable', 'parseable-unrepresentable', 'strict-lossy'];
+
+    it('has no fixture category the conformance runner does not execute', function () use ($categories) {
+        $unknown = [];
+        foreach (new \DirectoryIterator(TestPaths::spec()) as $entry) {
+            if ($entry->isDir() && !$entry->isDot() && !in_array($entry->getFilename(), $categories, true)) {
+                $unknown[] = $entry->getFilename();
+            }
+        }
+        expect($unknown)->toBe([]);
+    });
 
     foreach ($categories as $category) {
         it("`$category/` exists and has at least one fixture", function () use ($category, $countBySuffix) {

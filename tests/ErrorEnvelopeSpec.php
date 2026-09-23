@@ -33,7 +33,7 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getBody())->toBe('1.10');
         expect($thrown->getCanonical())->toBe('1.1');
         expect($thrown->getSpecSection())->toBe('§3.6/§5.2');
-        // Since ktav 0.7.2: the core's own Display rendering, taken
+        // Since ktav 0.8.0: the core's own Display rendering, taken
         // verbatim — no longer this binding's old "Ktav <class> ..."
         // reconstruction (task #303).
         expect($thrown->getMessage())->toBe(
@@ -59,7 +59,7 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getReason())->toBe('NonFiniteFloat');
         expect($thrown->getPath())->toBe(['srv', 'port']);
         expect($thrown->getSpan())->toBeNull();
-        // Since ktav 0.7.2: the core's own Display rendering, verbatim.
+        // Since ktav 0.8.0: the core's own Display rendering, verbatim.
         expect($thrown->getMessage())->toBe(
             'NonFiniteFloat: a Float is NaN or ±Infinity (spec § 5.9.0) at ["srv", "port"]'
         );
@@ -92,7 +92,7 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown->getError())->toBe('Message');
         expect($thrown->getReason())->toBeNull();
         expect($thrown->getErrorLine())->toBeNull();
-        // Since ktav 0.7.2: the core's own Display rendering, verbatim —
+        // Since ktav 0.8.0: the core's own Display rendering, verbatim —
         // no longer this binding's old "Ktav Message" reconstruction.
         expect($thrown->getMessage())->toBe(
             'input is not valid UTF-8: invalid utf-8 sequence of 1 bytes from index 0'

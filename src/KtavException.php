@@ -7,11 +7,11 @@ namespace Ktav;
 /**
  * Thrown on native failure. Carries the nine other structured error
  * envelope fields (issue rust#12) as first-class accessors. Since
- * ktav 0.7.2, getMessage() is the envelope's own `message` field,
+ * ktav 0.8.0, getMessage() is the envelope's own `message` field,
  * taken verbatim — never the raw JSON, and never reassembled from the
  * other fields (a reassembled sentence didn't match what every other
  * Ktav binding prints for the same error). Against a native library
- * built before 0.7.2, which never wrote `message`, this falls back to
+ * built before 0.8.0, which never wrote `message`, this falls back to
  * a locally-built sentence.
  *
  * Envelope field `line` -> getErrorLine(); PHP's final
@@ -110,13 +110,13 @@ final class KtavException extends \RuntimeException
             : null;
 
         if ($coreMessage !== null) {
-            // Since ktav 0.7.2: the core's own Display rendering, taken
+            // Since ktav 0.8.0: the core's own Display rendering, taken
             // verbatim. Replaces the reconstruction below, which this
-            // binding used to always build even though 0.7.2 makes it
+            // binding used to always build even though 0.8.0 makes it
             // unnecessary.
             $message = $coreMessage;
         } else {
-            // Fallback against a pre-0.7.2 native library, which never
+            // Fallback against a pre-0.8.0 native library, which never
             // wrote `message`.
             $message = 'Ktav ' . $error;
             if ($reason !== null) {
