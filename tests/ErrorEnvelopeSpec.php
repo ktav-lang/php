@@ -80,7 +80,7 @@ describe('structured error envelope (issue rust#12)', function () {
         expect(strpos($thrown->getMessage(), '{') !== 0)->toBe(true);
     });
 
-    it('non-ktav conditions are wrapped uniformly as Message with honest nulls', function () {
+    it('invalid UTF-8 has its own error category before parsing', function () {
         $thrown = null;
         try {
             Ktav::loads("\x80\x81");
@@ -89,17 +89,14 @@ describe('structured error envelope (issue rust#12)', function () {
         }
 
         expect($thrown)->toBeAnInstanceOf(KtavException::class);
-        expect($thrown->getError())->toBe('Message');
+        expect($thrown->getError())->toBe('InvalidUtf8');
         expect($thrown->getReason())->toBeNull();
         expect($thrown->getErrorLine())->toBeNull();
-        // Since ktav 0.8.0: the core's own Display rendering, verbatim —
-        // no longer this binding's old "Ktav Message" reconstruction.
-        expect($thrown->getMessage())->toBe(
-            'input is not valid UTF-8: invalid utf-8 sequence of 1 bytes from index 0'
-        );
+        expect($thrown->getSpecSection())->toBe('§6.15');
+        expect($thrown->getMessage())->toBe('InvalidUtf8: input is not valid UTF-8');
     });
 
-    it('PHP-side throws carry null envelope fields', function () {
+    it('PHP-side scalar root rejection carries its spec reason', function () {
         $thrown = null;
         try {
             Ktav::dumps(42);
@@ -108,16 +105,30 @@ describe('structured error envelope (issue rust#12)', function () {
         }
 
         expect($thrown)->toBeAnInstanceOf(KtavException::class);
-        expect($thrown->getError())->toBeNull();
-        expect($thrown->getReason())->toBeNull();
+        expect($thrown->getError())->toBe('Unrepresentable');
+        expect($thrown->getReason())->toBe('ScalarRoot');
         expect($thrown->getErrorLine())->toBeNull();
         expect($thrown->getLineText())->toBeNull();
         expect($thrown->getSpan())->toBeNull();
         expect($thrown->getPath())->toBeNull();
         expect($thrown->getBody())->toBeNull();
         expect($thrown->getCanonical())->toBeNull();
-        expect($thrown->getSpecSection())->toBeNull();
+        expect($thrown->getSpecSection())->toBe('§5.9.0');
         expect($thrown->getMessage())->not->toBe('');
+    });
+
+    it('PHP non-finite floats carry the writer refusal reason', function () {
+        foreach ([NAN, INF, -INF] as $value) {
+            $caught = null;
+            try {
+                Ktav::emitCanonical(['value' => $value]);
+            } catch (KtavException $e) {
+                $caught = $e;
+            }
+            expect($caught)->not->toBeNull();
+            expect($caught->getReason())->toBe('NonFiniteFloat');
+            expect($caught->getSpecSection())->toBe('§5.9.0');
+        }
     });
 
     it('path segments are exact decoded keys, never split on dots', function () {

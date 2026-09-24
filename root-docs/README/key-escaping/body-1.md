@@ -5,9 +5,12 @@ Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
 with a backslash:
 
 ```text
-a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
-a\:b: v        # key contains a colon          → ["a:b" => "v"]
-x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+## The key is the single segment "a.b" → ["a.b" => "v"]
+a\.b: v
+## The key contains a colon → ["a:b" => "v"]
+a\:b: v
+## Split on the first dot only → ["x" => ["y.z" => "v"]]
+x.y\.z: v
 ```
 
 A literal backslash in a key is `\\`.
@@ -19,9 +22,12 @@ A literal backslash in a key is `\\`.
 записываются с обратным слешем:
 
 ```text
-a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
-a\:b: v        # key contains a colon          → ["a:b" => "v"]
-x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+## Ключ состоит из одного сегмента "a.b" → ["a.b" => "v"]
+a\.b: v
+## Ключ содержит двоеточие → ["a:b" => "v"]
+a\:b: v
+## Разделение только по первой точке → ["x" => ["y.z" => "v"]]
+x.y\.z: v
 ```
 
 Литеральный обратный слеш в ключе записывается как `\\`.
@@ -33,9 +39,12 @@ x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
 以反斜杠书写：
 
 ```text
-a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
-a\:b: v        # key contains a colon          → ["a:b" => "v"]
-x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+## 键由单个段 "a.b" 组成 → ["a.b" => "v"]
+a\.b: v
+## 键中包含冒号 → ["a:b" => "v"]
+a\:b: v
+## 仅按第一个点拆分 → ["x" => ["y.z" => "v"]]
+x.y\.z: v
 ```
 
 键中的字面量反斜杠写作 `\\`。

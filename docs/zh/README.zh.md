@@ -84,13 +84,13 @@ $text = Ktav::dumps($doc);
 | `Ktav::dumpsForceStrings(array $value): string` | 与 `dumps` 相同，但把每个叶子标量强制为 String。 |
 | `Ktav::emitCanonical(array $value): string` | 将值渲染为确定性的规范形式。 |
 | `Ktav::format(string $src): string` | 规范文档写法，同时保留注释。 |
-| `Ktav::canonicalFromSource(string $src): string` | 一次调用完成解析并重新输出为规范 Ktav —— 相当于 `emitCanonical(loads($src))`，中间不产生值。像 `emitCanonical` 一样丢弃注释和空行。 |
+| `Ktav::canonicalFromSource(string $src): string` | 直接将源文本规范化，并保留 PHP 值表示可能折叠的复合结构（例如 `a: {}` 仍为 `a: {}`，而 `loads` 会把空 Object 表示为 `[]`）。丢弃注释和空行。 |
 | `Ktav::nativeVersion(): string` | 已加载 `ktav_cabi` 的版本。 |
 
 `dumpsForceStrings` 把整数、float、布尔与 `null` 用原始标记（`::`）
 压平为文本形式；对象与数组保持自身结构，因为只有叶子会被强制。
 结果经由 `loads` 解析回来仍是同一组 String 标量 ——
-当下游消费方不理解类型标记时，
+当下游消费方只接受字符串值时，
 这很有用。
 
 ### 格式化
@@ -175,9 +175,12 @@ wire 信封相同。
 以反斜杠书写：
 
 ```text
-a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
-a\:b: v        # key contains a colon          → ["a:b" => "v"]
-x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+## 键由单个段 "a.b" 组成 → ["a.b" => "v"]
+a\.b: v
+## 键中包含冒号 → ["a:b" => "v"]
+a\:b: v
+## 仅按第一个点拆分 → ["x" => ["y.z" => "v"]]
+x.y\.z: v
 ```
 
 键中的字面量反斜杠写作 `\\`。
@@ -198,7 +201,7 @@ x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
 
 ## 运行时支持
 
-- PHP 7.4 / 8.0 / 8.1 / 8.2 / 8.3+。CI 每次运行都在 LTS 线上测试。
+- 支持的 PHP 版本：7.4 / 8.0 / 8.1 / 8.2 / 8.3+。CI 在 Linux、macOS 和 Windows 上测试 PHP 7.4、8.2 和 8.3。
 - 预编译二进制覆盖：`linux/amd64`、`linux/arm64`、`darwin/amd64`、
   `darwin/arm64`、`windows/amd64`、`windows/arm64`。
 - Linux 发行版需 glibc 2.17+（zigbuild 基线）。Alpine（musl）

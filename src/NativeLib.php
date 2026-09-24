@@ -130,6 +130,13 @@ final class NativeLib
                 // keeps old binaries / edge cases working.
                 $fields = $payload !== '' ? json_decode($payload, true) : null;
                 if (is_array($fields) && isset($fields['error']) && is_string($fields['error'])) {
+                    if ($fields['error'] === 'Message'
+                        && in_array($fn, ['ktav_loads', 'ktav_loads_strict', 'ktav_format', 'ktav_canonical_from_source'], true)
+                        && preg_match('//u', $input) !== 1) {
+                        $fields['error'] = 'InvalidUtf8';
+                        $fields['spec_section'] = '§6.15';
+                        $fields['message'] = 'InvalidUtf8: input is not valid UTF-8';
+                    }
                     throw KtavException::fromEnvelope($fields);
                 }
                 throw new KtavException($payload !== '' ? $payload : 'native call failed with code ' . $rc);

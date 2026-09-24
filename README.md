@@ -84,14 +84,14 @@ A complete runnable example lives in [`examples/basic.php`](examples/basic.php).
 | `Ktav::dumpsForceStrings(array $value): string` | Render like `dumps`, but coerce every leaf scalar to a String. |
 | `Ktav::emitCanonical(array $value): string` | Render a value as deterministic canonical form. |
 | `Ktav::format(string $src): string` | Normalise a document's spelling, keeping comments. |
-| `Ktav::canonicalFromSource(string $src): string` | Parse and re-emit as canonical Ktav in one call — `emitCanonical(loads($src))` with no intermediate value. Drops comments and blank lines like `emitCanonical` does. |
+| `Ktav::canonicalFromSource(string $src): string` | Canonicalize source directly, preserving compound shape that PHP values may collapse (for example, `a: {}` stays `a: {}` while `loads` represents the empty Object as `[]`). Drops comments and blank lines. |
 | `Ktav::nativeVersion(): string` | Version of the loaded `ktav_cabi`. |
 
 `dumpsForceStrings` flattens integers, floats, booleans and `null` to
 their textual form via the raw marker (`::`); objects and arrays keep
 their structure, since only leaves are coerced. The result parses back
 through `loads` as the same set of String scalars — useful when a
-downstream consumer does not understand typed markers.
+downstream consumer needs string-only values.
 
 ### Formatting
 
@@ -175,9 +175,12 @@ Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
 with a backslash:
 
 ```text
-a\.b: v        # key is the single segment "a.b" → ["a.b" => "v"]
-a\:b: v        # key contains a colon          → ["a:b" => "v"]
-x.y\.z: v      # split on the first dot only   → ["x" => ["y.z" => "v"]]
+## The key is the single segment "a.b" → ["a.b" => "v"]
+a\.b: v
+## The key contains a colon → ["a:b" => "v"]
+a\:b: v
+## Split on the first dot only → ["x" => ["y.z" => "v"]]
+x.y\.z: v
 ```
 
 A literal backslash in a key is `\\`.
@@ -198,7 +201,7 @@ macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux.
 
 ## Runtime support
 
-- PHP 7.4 / 8.0 / 8.1 / 8.2 / 8.3+. Tested on the LTS lines on every CI run.
+- Supported PHP: 7.4 / 8.0 / 8.1 / 8.2 / 8.3+. CI tests PHP 7.4, 8.2 and 8.3 on Linux, macOS and Windows.
 - Prebuilt binaries for: `linux/amd64`, `linux/arm64`, `darwin/amd64`,
   `darwin/arm64`, `windows/amd64`, `windows/arm64`.
 - Linux distros must use glibc 2.17+ (zigbuild baseline). Alpine

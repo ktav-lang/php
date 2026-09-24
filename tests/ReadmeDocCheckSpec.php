@@ -47,9 +47,10 @@ describe('README claims', function () {
             expect(Ktav::format($once))->toBe($once);
         });
 
-        it('equals emitCanonical of the parse when no trivia is present', function () {
+        it('equals source canonicalization when no trivia is present', function () {
             $doc = "server: {host: a, port: 80}\nratio: 0.5\n";
-            expect(Ktav::format($doc))->toBe(Ktav::emitCanonical(Ktav::loads($doc)));
+            expect(Ktav::format($doc))->toBe(Ktav::canonicalFromSource($doc));
+            expect(Ktav::format("a: {}\n"))->toBe(Ktav::canonicalFromSource("a: {}\n"));
         });
 
         it('diverges from emitCanonical when trivia is present', function () {
@@ -58,12 +59,13 @@ describe('README claims', function () {
             expect(Ktav::format($doc))->not->toBe(Ktav::emitCanonical(Ktav::loads($doc)));
         });
 
-        it('canonicalFromSource agrees with emitCanonical(loads(x)), and drops trivia', function () {
+        it('canonicalFromSource matches value canonicalization for these shapes and drops trivia', function () {
             // Task #311: this symbol was already exported by the native
             // library — every cabi crate carries it — but this binding
-            // never surfaced it. It has to agree with the two-step path
-            // it replaces, and it must NOT keep comments/blank lines the
-            // way format() does.
+            // never surfaced it. These representable shapes agree with
+            // the value-based path; direct canonicalization also preserves
+            // compound shape that PHP values can collapse. It drops
+            // comments and blank lines unlike format().
             foreach ([
                 "x: 1.0\n",
                 "x: 1e400\n",
@@ -73,6 +75,10 @@ describe('README claims', function () {
                 expect(Ktav::canonicalFromSource($src))
                     ->toBe(Ktav::emitCanonical(Ktav::loads($src)));
             }
+            $emptyObject = "a: {}\n";
+            expect(Ktav::canonicalFromSource($emptyObject))->toBe("a: {}\n");
+            expect(Ktav::emitCanonical(Ktav::loads($emptyObject)))->toBe("a: []\n");
+
             $out = Ktav::canonicalFromSource("## why\na: 1\n\n\nb: 2\n");
             expect($out)->not->toContain('##');
             expect($out)->not->toContain("\n\n");

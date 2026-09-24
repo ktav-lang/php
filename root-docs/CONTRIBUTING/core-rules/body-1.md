@@ -11,7 +11,7 @@ Tests are Kahlan specs (`describe` / `it`) under `tests/`:
 
 | File                           | Scope                                                                       |
 | ------------------------------ | --------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` round-trips, typed markers, quoted keys, unicode escapes, big integers, canonical output. |
+| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` round-trips, typed scalar inference, quoted keys, unicode escapes, big integers, canonical output. |
 | `tests/FormatterSpec.php`      | `Ktav::format` — comment preservation, blank-line collapsing, fixed point, canonical equivalence without trivia. |
 | `tests/ErrorEnvelopeSpec.php`  | the nine structured error-envelope fields carried by `KtavException`.       |
 | `tests/ConformanceSpec.php`    | cross-language conformance against the `ktav-lang/spec` fixture corpus.     |
@@ -31,7 +31,7 @@ Tests are Kahlan specs (`describe` / `it`) under `tests/`:
 
 | Файл                           | Область                                                                                 |
 | ------------------------------ | --------------------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | Round-trip'ы `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings`, типизированные маркеры, quoted keys, unicode-эскейпы, большие целые, каноничный вывод. |
+| `tests/SmokeSpec.php`          | Round-trip'ы `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings`, вывод типов скаляров, quoted keys, unicode-эскейпы, большие целые, каноничный вывод. |
 | `tests/FormatterSpec.php`      | `Ktav::format` — сохранение комментариев, схлопывание пустых строк, фиксированная точка, совпадение с каноничной формой без тривии. |
 | `tests/ErrorEnvelopeSpec.php`  | девять структурных полей обёртки ошибки, которые несёт `KtavException`.                  |
 | `tests/ConformanceSpec.php`    | кросс-языковая conformance-сверка с корпусом фикстур `ktav-lang/spec`.                   |
@@ -50,7 +50,7 @@ Tests are Kahlan specs (`describe` / `it`) under `tests/`:
 
 | 文件                           | 范围                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` 往返、类型标记、引号键、unicode 转义、大整数、规范输出。 |
+| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` 往返、标量类型推断、引号键、unicode 转义、大整数、规范输出。 |
 | `tests/FormatterSpec.php`      | `Ktav::format` —— 保留注释、折叠空行、不动点、无杂注时与规范形式一致。 |
 | `tests/ErrorEnvelopeSpec.php`  | `KtavException` 携带的九个结构化错误信封字段。 |
 | `tests/ConformanceSpec.php`    | 针对 `ktav-lang/spec` 固定装置语料库的跨语言一致性对齐。 |

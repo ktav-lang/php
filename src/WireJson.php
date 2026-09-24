@@ -97,7 +97,12 @@ final class WireJson
         }
         if (is_float($v)) {
             if (!is_finite($v)) {
-                throw new KtavException('Ktav floats must be finite (got ' . $v . ')');
+                throw KtavException::fromEnvelope([
+                    'error' => 'Unrepresentable',
+                    'reason' => 'NonFiniteFloat',
+                    'spec_section' => '§5.9.0',
+                    'message' => 'NonFiniteFloat: a Float is NaN or Infinity',
+                ]);
             }
             // `(string) $v` is governed by the `precision` ini setting
             // (default 14 significant digits) and is lossy. `json_encode`

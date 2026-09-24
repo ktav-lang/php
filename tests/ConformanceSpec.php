@@ -54,19 +54,21 @@ describe('Ktav (conformance)', function () {
      * Translate a fixture JSON value into the PHP/wire representation:
      * objects → assoc arrays, arrays → lists, numbers → int/float (json_decode
      * assoc already does this). In `unrepresentable/` only, the non-finite
-     * float sentinel `{"$float": "NaN"|"Infinity"|"-Infinity"}` maps to our
-     * cabi wire key `"$f"`.
+     * float sentinel maps to a native PHP float before wire encoding.
      */
     $translateFixtureValue = function ($v) use (&$translateFixtureValue) {
         if (is_array($v)) {
-            $isList = array_keys($v) === range(0, count($v) - 1);
+            if (count($v) === 1 && isset($v['$float']) && is_string($v['$float'])) {
+                switch ($v['$float']) {
+                    case 'NaN': return NAN;
+                    case 'Infinity': return INF;
+                    case '-Infinity': return -INF;
+                }
+                throw new \InvalidArgumentException('unknown $float fixture value');
+            }
             $out = [];
             foreach ($v as $k => $sub) {
-                if (!$isList && $k === '$float' && is_string($sub)) {
-                    $out['$f'] = $sub;
-                } else {
-                    $out[$k] = $translateFixtureValue($sub);
-                }
+                $out[$k] = $translateFixtureValue($sub);
             }
             return $out;
         }
@@ -140,7 +142,7 @@ describe('Ktav (conformance)', function () {
          * byte-exact assertion again and enforces the fix.
          *
          * Documented for consumers in CHANGELOG under
-         * "Unreleased → Known limitations".
+         * "0.8.0 → Known limitations".
          */
         $knownGaps = [
             'inline/object/empty.ktav' => 'empty Object round-trips as empty Array',
@@ -179,11 +181,23 @@ describe('Ktav (conformance)', function () {
 
         foreach ($cases as $rel => $abs) {
             it($rel, function () use ($abs) {
+                $oraclePath = substr($abs, 0, -5) . '.json';
+                expect(file_exists($oraclePath))->toBe(true);
+                $oracle = json_decode(
+                    (string) file_get_contents($oraclePath),
+                    true,
+                    512,
+                    JSON_THROW_ON_ERROR,
+                );
                 $src = (string) file_get_contents($abs);
-                $closure = function () use ($src) {
+                $caught = null;
+                try {
                     Ktav::loads($src);
-                };
-                expect($closure)->toThrow(new KtavException());
+                } catch (KtavException $e) {
+                    $caught = $e;
+                }
+                expect($caught)->not->toBeNull();
+                expect($caught->getError())->toBe($oracle['expected_error']);
             });
         }
     });
@@ -207,16 +221,25 @@ describe('Ktav (conformance)', function () {
                     JSON_THROW_ON_ERROR,
                 );
                 $v = $translateFixtureValue($fixture['value']);
+                $reason = $fixture['unrepresentable_reason'];
 
-                $dumps = function () use ($v) {
+                $assertReason = function (callable $operation) use ($reason) {
+                    $caught = null;
+                    try {
+                        $operation();
+                    } catch (KtavException $e) {
+                        $caught = $e;
+                    }
+                    expect($caught)->not->toBeNull();
+                    expect($caught->getReason())->toBe($reason);
+                };
+
+                $assertReason(function () use ($v) {
                     Ktav::dumps($v);
-                };
-                expect($dumps)->toThrow(new KtavException());
-
-                $canonical = function () use ($v) {
+                });
+                $assertReason(function () use ($v) {
                     Ktav::emitCanonical($v);
-                };
-                expect($canonical)->toThrow(new KtavException());
+                });
             });
         }
     });
@@ -240,10 +263,15 @@ describe('Ktav (conformance)', function () {
                 $loaded = Ktav::loads($src);
                 expect($equals($oracle['value'], $loaded))->toBe(true);
 
-                $canonical = function () use ($loaded) {
+                $caught = null;
+                try {
                     Ktav::emitCanonical($loaded);
-                };
-                expect($canonical)->toThrow(new KtavException());
+                } catch (KtavException $e) {
+                    $caught = $e;
+                }
+                expect($caught)->not->toBeNull();
+                expect(array_key_exists('unrepresentable_reason', $oracle))->toBe(true);
+                expect($caught->getReason())->toBe($oracle['unrepresentable_reason']);
             });
         }
     });

@@ -20,6 +20,12 @@
   }
   ```
 
+  The envelope names the two writer rejections apart:
+  `"UnrepresentableAt"` when the writer can say where the offending
+  node is (it also fills `getPath()`), `"Unrepresentable"` when it
+  cannot. The `reason` code is identical in both, so a caller that only
+  needs "the write was refused" matches on `getReason()`.
+
 >>>>> lang=ru
 - **`KtavException` теперь несёт девять структурных полей ошибки** из
   конверта ошибок ядра на Rust: `getError()`, `getReason()`,
@@ -42,6 +48,12 @@
   }
   ```
 
+  Конверт по-разному называет два отказа писателя:
+  `"UnrepresentableAt"`, когда писатель может указать проблемный узел
+  (тогда он заполняет и `getPath()`), и `"Unrepresentable"`, когда не
+  может. Код причины одинаков, поэтому вызывающему, которому достаточно
+  знать «в записи отказано», хватает сверки с `getReason()`.
+
 >>>>> lang=zh
 - **`KtavException` 现在携带来自 Rust 核心错误信封的九个结构化字段**:
   `getError()`、`getReason()`、`getErrorLine()`、`getLineText()`、
@@ -61,4 +73,9 @@
       $e->getSpecSection();  // "§3.6/§5.2"
   }
   ```
+
+  信封把写入器的两种拒绝分别命名:能指出问题节点位置时为
+  `"UnrepresentableAt"`(此时也会填充 `getPath()`),不能指出时为
+  `"Unrepresentable"`。两者的原因码完全相同,因此只需知道「写入被
+  拒绝」的调用方匹配 `getReason()` 即可。
 

@@ -217,4 +217,17 @@ describe('Ktav (smoke)', function () {
 
     });
 
+    it('runs the basic example', function () {
+        ob_start();
+        try {
+            require __DIR__ . '/../examples/basic.php';
+            $output = ob_get_contents();
+        } finally {
+            ob_end_clean();
+        }
+
+        expect($output)->toContain('service=web port=8080');
+        expect($output)->toContain('ktav_cabi version: 0.8.0');
+    });
+
 });

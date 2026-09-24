@@ -10,8 +10,8 @@ namespace Ktav;
  * .NET / JS bindings, same `{"$i":"…"}` / `{"$f":"…"}` JSON wire
  * format with lossless typed-integer / typed-float round-trip.
  *
- * Since spec 0.5.0: typed markers `:i` / `:f` are inferred from the
- * lexical form (`port: 8080` yields an Integer, not a String). Use the
+ * Since spec 0.5.0, numeric types are inferred from lexical form
+ * (`port: 8080` yields an Integer, not a String). Use the
  * raw-marker form (`port:: 8080`) to keep a value as a String. Comments
  * now require `##` (a single `#` is content).
  *
@@ -78,8 +78,7 @@ final class Ktav
      * Compounds (associative / sequential arrays) preserve their
      * structure; only leaf scalars are coerced. Useful for dumping
      * configuration in a "everything is a string" shape — e.g. for
-     * environments or downstream consumers that don't understand the
-     * `:i` / `:f` typed markers.
+     * environments or downstream consumers that need string-only values.
      *
      * @param array<mixed, mixed> $value
      * @throws KtavException on any render error.
@@ -91,8 +90,9 @@ final class Ktav
 
     /**
      * Render a native PHP value to the deterministic **canonical** Ktav
-     * form (spec § 7). The output is stable across platforms, sorts
-     * object keys, and round-trips unchanged through `loads` / `dumps`.
+     * form (spec § 5.9). The output is stable across platforms and
+     * preserves object key order. Empty Object/Array identity is lost
+     * when source text passes through PHP arrays.
      *
      * Useful for diffing, hashing, and golden-file tests.
      *
@@ -115,7 +115,7 @@ final class Ktav
      * (`format(format($src)) === format($src)`). Key order is never
      * changed (canonical form has no sorting rule, spec § 5.9). For a
      * document with no comments AND no blank lines the result equals
-     * `self::emitCanonical(self::loads($src))`.
+     * `self::canonicalFromSource($src)`.
      *
      * @throws KtavException on any format error.
      */
@@ -126,11 +126,8 @@ final class Ktav
 
     /**
      * Parse Ktav source text and immediately re-emit it in canonical
-     * form (spec § 5.9), preserving the source's insertion order of
-     * object keys. Equivalent to `self::emitCanonical(self::loads($src))`,
-     * but with no intermediate PHP value: one native call instead of
-     * two, and no round-trip through the `{"$i":"…"}` / `{"$f":"…"}`
-     * JSON wire tags in between.
+     * form (spec § 5.9), preserving object key order and empty
+     * Object/Array identity without a PHP value round-trip.
      *
      * Comments and blank lines do NOT survive — canonical form carries
      * no trivia; use {@see format} for that.
@@ -164,7 +161,12 @@ final class Ktav
     private static function dumpsImpl(string $fn, $value): string
     {
         if (!is_array($value)) {
-            throw new KtavException('top-level Ktav document must be an object or array');
+            throw KtavException::fromEnvelope([
+                'error' => 'Unrepresentable',
+                'reason' => 'ScalarRoot',
+                'spec_section' => '§5.9.0',
+                'message' => 'ScalarRoot: the document root is not an Object or an Array',
+            ]);
         }
         // Empty PHP array is ambiguous (list or object). The cabi side
         // accepts both `{}` and `[]` at the root — pick `{}` for

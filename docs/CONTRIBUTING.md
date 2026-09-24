@@ -14,7 +14,7 @@ Tests are Kahlan specs (`describe` / `it`) under `tests/`:
 
 | File                           | Scope                                                                       |
 | ------------------------------ | --------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` round-trips, typed markers, quoted keys, unicode escapes, big integers, canonical output. |
+| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` round-trips, typed scalar inference, quoted keys, unicode escapes, big integers, canonical output. |
 | `tests/FormatterSpec.php`      | `Ktav::format` — comment preservation, blank-line collapsing, fixed point, canonical equivalence without trivia. |
 | `tests/ErrorEnvelopeSpec.php`  | the nine structured error-envelope fields carried by `KtavException`.       |
 | `tests/ConformanceSpec.php`    | cross-language conformance against the `ktav-lang/spec` fixture corpus.     |

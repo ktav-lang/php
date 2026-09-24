@@ -13,7 +13,7 @@
 
 | 文件                           | 范围                                                                                 |
 | ------------------------------ | ------------------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` 往返、类型标记、引号键、unicode 转义、大整数、规范输出。 |
+| `tests/SmokeSpec.php`          | `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings` 往返、标量类型推断、引号键、unicode 转义、大整数、规范输出。 |
 | `tests/FormatterSpec.php`      | `Ktav::format` —— 保留注释、折叠空行、不动点、无杂注时与规范形式一致。 |
 | `tests/ErrorEnvelopeSpec.php`  | `KtavException` 携带的九个结构化错误信封字段。 |
 | `tests/ConformanceSpec.php`    | 针对 `ktav-lang/spec` 固定装置语料库的跨语言一致性对齐。 |

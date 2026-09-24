@@ -47,16 +47,17 @@ describe('Ktav::format (comment-preserving formatter)', function () {
             ->toBe("key: [\n    alpha\n    beta\n]\n\nother: value\n");
     });
 
-    it('equals emitCanonical(loads(src)) when there are no comments and no blank lines', function () {
+    it('equals source canonicalization when there are no comments or blank lines', function () {
         $docs = [
             // nested object with an array
             "srv:\n  port: 8080\n  tags: [\n    a\n    b\n]\n",
             // top-level array
             "[\none\n2\n]\n",
+            "a: {}\n",
         ];
 
         foreach ($docs as $src) {
-            expect(Ktav::format($src))->toBe(Ktav::emitCanonical(Ktav::loads($src)));
+            expect(Ktav::format($src))->toBe(Ktav::canonicalFromSource($src));
         }
     });
 

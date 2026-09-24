@@ -17,15 +17,15 @@ use Ktav\Ktav;
 
 $src = <<<KTAV
 service: web
-port:i 8080
-ratio:f 0.75
+port: 8080
+ratio: 0.75
 tls: true
 tags: [
     prod
     eu-west-1
 ]
 db.host: primary.internal
-db.timeout:i 30
+db.timeout: 30
 KTAV;
 
 // ── 1. Parse — typed reads off the parsed array. ─────────────────────

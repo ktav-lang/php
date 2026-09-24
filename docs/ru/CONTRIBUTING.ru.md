@@ -14,7 +14,7 @@
 
 | Файл                           | Область                                                                                 |
 | ------------------------------ | --------------------------------------------------------------------------------------- |
-| `tests/SmokeSpec.php`          | Round-trip'ы `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings`, типизированные маркеры, quoted keys, unicode-эскейпы, большие целые, каноничный вывод. |
+| `tests/SmokeSpec.php`          | Round-trip'ы `loads` / `loadsStrict` / `dumps` / `dumpsForceStrings`, вывод типов скаляров, quoted keys, unicode-эскейпы, большие целые, каноничный вывод. |
 | `tests/FormatterSpec.php`      | `Ktav::format` — сохранение комментариев, схлопывание пустых строк, фиксированная точка, совпадение с каноничной формой без тривии. |
 | `tests/ErrorEnvelopeSpec.php`  | девять структурных полей обёртки ошибки, которые несёт `KtavException`.                  |
 | `tests/ConformanceSpec.php`    | кросс-языковая conformance-сверка с корпусом фикстур `ktav-lang/spec`.                   |

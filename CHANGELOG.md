@@ -13,6 +13,8 @@ itself — for the latter see
 
 ## Unreleased
 
+## 0.8.0 — 2026-09-24
+
 ### Added
 
 - **`Ktav::format(string $src): string`** — a comment-preserving
@@ -27,7 +29,7 @@ itself — for the latter see
   `Ktav::format(Ktav::format($s)) === Ktav::format($s)`. Key order is
   never changed (canonical form has no sorting rule). For a document
   with no comments *and no blank lines* the result equals
-  `Ktav::emitCanonical(Ktav::loads($src))`; the stronger condition is
+  `Ktav::canonicalFromSource($src)`; the stronger condition is
   deliberate, since blank lines are no more part of the value model
   than comments are.
 
@@ -70,12 +72,19 @@ itself — for the latter see
   `getErrorLine()` rather than `getLine()` because PHP's
   `Exception::getLine()` is `final`.
 
+- **`Ktav::canonicalFromSource(string $src): string`** canonicalizes source
+  directly, preserving empty Object/Array distinctions that PHP values lose.
+  Unlike `emitCanonical(loads($src))`, it never round-trips through PHP values.
+
 ### Changed
 
 - **Error messages now use the core's `message` when provided.** With
   core 0.8.0 this preserves its `Display` output verbatim; older cores
   without that field fall back to a message built from the envelope.
   `getMessage()` remains human-readable and is never the raw JSON.
+
+- PHP-side invalid UTF-8, scalar-root and non-finite Float errors now carry
+  the spec's error category or writer reason in `KtavException`.
 
 - Minimum `ktav` core is **0.8.0**; the conformance tests are pinned to
   spec **v0.8.0**.
@@ -97,12 +106,10 @@ itself — for the latter see
   specification; the prebuilt-library download fallback now targets the
   `v0.8.0` release asset.
 
-- Tracks ktav 0.7.0 and spec 0.7.0: quoted keys (§ 5.3.3) and the
-  `\uXXXX` escape in inline values (§ 3.7.1) come from the Rust core
-  and are transparent across the FFI boundary — binding source
-  unchanged apart from the dependency bump. MSRV raised to Rust 1.71
-  (ktav 0.7's real MSRV); `[package.metadata.ktav] spec-version` is
-  now "0.7.0".
+- Quoted keys (§ 5.3.3) and `\uXXXX` escapes in inline values (§ 3.7.1)
+  arrived with spec 0.7.0 and remain available through the Rust core.
+  The MSRV is Rust 1.71; current `[package.metadata.ktav] spec-version`
+  is "0.8.0".
 - Conformance suite points at `spec/versions/0.8/tests` (it silently
   kept reading the stale `0.7` corpus after the submodule was
   re-pinned to `0.8.0` — the path was hardcoded, not derived from the

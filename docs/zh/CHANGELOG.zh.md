@@ -13,6 +13,8 @@ MINOR 递增即破坏性变更。
 
 ## Unreleased
 
+## 0.8.0 — 2026-09-24
+
 ### 新增
 
 - **`Ktav::format(string $src): string`** —— 一个保留注释的格式化器,
@@ -23,7 +25,7 @@ MINOR 递增即破坏性变更。
   空填充会被丢弃 —— 正是这一点让该变换成为不动点:
   `Ktav::format(Ktav::format($s)) === Ktav::format($s)`。键序永不改变
   (规范形式没有排序规则)。对于既无注释*也无空行*的文档,结果等于
-  `Ktav::emitCanonical(Ktav::loads($src))`;这个更强的条件是刻意的,
+  `Ktav::canonicalFromSource($src)`;这个更强的条件是刻意的,
   因为空行与注释一样,都不属于值模型。
 
   ```php
@@ -62,11 +64,17 @@ MINOR 递增即破坏性变更。
   用 `getErrorLine()` 而不是 `getLine()`,因为 PHP 的
   `Exception::getLine()` 是 `final`。
 
+- **`Ktav::canonicalFromSource(string $src): string`** 直接规范化源文本,
+  保留经 PHP 值转换会丢失的空 Object 与空 Array 之别。
+
 ### 变更
 
 - **错误消息优先使用核心提供的 `message` 字段。** 对于 0.8.0 核心,这会
   原样保留其 `Display` 输出;不含该字段的旧核心则回退到由信封字段构造的
   消息。`getMessage()` 仍然人类可读,且绝不会是原始 JSON。
+
+- PHP 层对无效 UTF-8、标量根节点和非有限 Float 的错误现在携带规范中的
+  错误类别或写入拒绝原因。
 
 - `ktav` 核心最低版本为 **0.8.0**;一致性测试固定使用 spec **v0.8.0**。
 
@@ -80,10 +88,9 @@ MINOR 递增即破坏性变更。
   (新增 § 5.2:带多余前导零的十进制数解析为 String,而非 Integer)。
 - 包版本升至 **0.8.0**,与核心和规范同步;预编译库的回退下载现在指向
   `v0.8.0` 发布资产。
-- 跟踪 ktav 0.7.0 与 spec 0.7.0:带引号的键(§ 5.3.3)与 inline 值中的
-  `\uXXXX` 转义(§ 3.7.1)来自 Rust 内核,跨越 FFI 边界完全透明 ——
-  绑定源码除依赖升级外未改动。MSRV 提升至 Rust 1.71(ktav 0.7 的真实
-  MSRV);`[package.metadata.ktav] spec-version` 现为 "0.7.0"。
+- 带引号的键(§ 5.3.3)与 inline 值中的 `\uXXXX` 转义(§ 3.7.1)始于
+  spec 0.7.0,并继续由 Rust 内核提供。MSRV 为 Rust 1.71;当前
+  `[package.metadata.ktav] spec-version` 为 "0.8.0"。
 - 一致性测试套件指向 `spec/versions/0.8/tests`(子模块重新固定到
   `0.8.0` 之后,它一直静默读取过期的 `0.7` 语料——路径是硬编码的,
   并非从固定版本推导而来),并执行语料中的每个类别:
