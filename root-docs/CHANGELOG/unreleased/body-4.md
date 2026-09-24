@@ -2,9 +2,10 @@
 - Migrated `crates/cabi` to a single `ktav::declare_cabi!()` invocation
   (ktav's `cabi` feature) instead of a hand-rolled C ABI shim; the
   exported symbol surface is unchanged, so the PHP API is unaffected.
-  Dependency floor raised to **0.8.0**, spec submodule re-pinned to
+  Dependency floor is **0.8.0**, and the spec submodule is pinned to
   `v0.8.0` (adds § 5.2: a decimal with a redundant leading zero parses
   as a String, not an Integer).
+
 - The package version moves to **0.8.0**, in step with the core and the
   specification; the prebuilt-library download fallback now targets the
   `v0.8.0` release asset.
@@ -31,9 +32,10 @@
 - `crates/cabi` переведён на единственный вызов `ktav::declare_cabi!()`
   (фича `cabi` крейта ktav) вместо самописной C ABI-прослойки; набор
   экспортируемых символов не изменился, поэтому API биндинга не затронут.
-  Нижняя граница зависимости поднята до **0.8.0**, подмодуль spec
-  перезакреплён на `v0.8.0` (добавлен § 5.2: десятичное число с
-  избыточным ведущим нулём разбирается как String, а не Integer).
+  Минимальная версия ядра — **0.8.0**, подмодуль spec закреплён на
+  `v0.8.0` (добавлен § 5.2: десятичное число с избыточным ведущим нулём
+  разбирается как String, а не Integer).
+
 - Версия пакета переходит на **0.8.0**, синхронно с ядром и
   спецификацией; резервная загрузка предсобранной библиотеки теперь
   нацелена на ассет релиза `v0.8.0`.
@@ -57,23 +59,17 @@
   чтобы это не повторилось молча.
 
 >>>>> lang=zh
-- `crates/cabi` 改为单次调用 `ktav::declare_cabi!()`(ktav 的 `cabi`
-  特性),取代手写的 C ABI 垫片;导出的符号集不变,因此绑定 API 不受
-  影响。依赖下限提升至 **0.8.0**,spec 子模块重新固定到 `v0.8.0`
-  (新增 § 5.2:带多余前导零的十进制数解析为 String,而非 Integer)。
-- 包版本升至 **0.8.0**,与核心和规范同步;预编译库的回退下载现在指向
-  `v0.8.0` 发布资产。
+- **空的 Object 与空的 Array 在解析后无法区分。** PHP 对两种复合值只有
+  一个 `array` 类型,*空*复合值在 `Ktav::loads()` 返回的那一刻就丢失了
+  自己原本是哪一种:
 
-- 跟踪 ktav 0.7.0 与 spec 0.7.0:带引号的键(§ 5.3.3)与 inline 值中的
-  `\uXXXX` 转义(§ 3.7.1)来自 Rust 内核,跨越 FFI 边界完全透明 ——
-  绑定源码除依赖升级外未改动。MSRV 提升至 Rust 1.71(ktav 0.7 的真实
-  MSRV);`[package.metadata.ktav] spec-version` 现为 "0.7.0"。
-- 一致性测试套件指向 `spec/versions/0.8/tests`(子模块重新固定到
-  `0.8.0` 之后,它一直静默读取过期的 `0.7` 语料——路径是硬编码的,
-  并非从固定版本推导而来),并执行语料中的每个类别:
-  `unrepresentable/` 与 `parseable-unrepresentable/`(写入方必须拒绝
-  fixture 的值 / 可正常解析但规范输出必须拒绝的值),以及新增的
-  `strict-lossy/`(`loads()` 必须等于 lax 值,`loadsStrict()` 必须以
-  匹配的原因、body 与规范形式抛出异常)。一个 guard 测试会在语料中
-  出现无法识别的类别目录时使构建失败,以防止这个问题再次悄然发生。
+  ```php
+  Ktav::loads("a: {}\n");  // → ["a" => []]
+  Ktav::loads("a: []\n");  // → ["a" => []] —— 相同的值
+  ```
+
+  写回时两者都输出为 `a: []`。在文档根部,歧义向相反方向消解:空的 PHP
+  数组会输出为空 Object(`Ktav::dumps([])` → `{}`),因此顶层的 `[]`
+  文档读回再渲染会变成 `{}`。存了 `a: {}` 并期望读回 `a: {}` 的配置
+  实际会得到 `a: []`。
 

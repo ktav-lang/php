@@ -10,17 +10,19 @@
 
 ### Changed
 
-- **Error messages have changed.** They are now reconstructed from the
-  envelope's fields rather than passed through from the core's
-  `Display` output. Callers matching on message strings will need to
-  match on `getError()` / `getReason()` instead — which is the point of
-  the change. `getMessage()` remains human-readable and is never the
-  raw JSON.
+- **Error messages now use the core's `message` when provided.** With
+  core 0.8.0 this preserves its `Display` output verbatim; older cores
+  without that field fall back to a message built from the envelope.
+  `getMessage()` remains human-readable and is never the raw JSON.
 
-- Minimum `ktav` core raised to **0.7.1**: `format_str` and
-  `ErrorEnvelope` do not exist before it. In Cargo terms the
-  requirement is `>=0.7.1, <0.8.0` — the floor rises, the ceiling stays
-  inside 0.7.x.
+- Minimum `ktav` core is **0.8.0**; the conformance tests are pinned to
+  spec **v0.8.0**.
+
+- **Float serialization now round-trips PHP floats reliably.** After
+  ktav 0.6.4, floats are encoded through `json_encode()`'s
+  round-trip-safe representation instead of PHP's precision-limited
+  `(string)` conversion; integral floats retain a decimal marker.
+
 
 >>>>> lang=ru
   Конверт по-разному называет два отказа писателя:
@@ -34,16 +36,20 @@
 
 ### Изменено
 
-- **Тексты сообщений об ошибках изменились.** Теперь они собираются заново
-  из полей конверта, а не передаются насквозь из вывода `Display` ядра.
-  Вызывающим, которые сверяли строки сообщений, нужно переходить на
-  `getError()` / `getReason()` — в этом и смысл изменения. `getMessage()`
-  остаётся человекочитаемым и никогда не является сырым JSON.
+- **Текст ошибки теперь берётся из поля `message` ядра, если оно есть.**
+  В ядре 0.8.0 это дословный вывод `Display`; у более старых ядер без
+  этого поля используется запасное сообщение, составленное из конверта.
+  `getMessage()` остаётся человекочитаемым и никогда не является сырым JSON.
 
-- Минимальная версия ядра `ktav` поднята до **0.7.1**: `format_str` и
-  `ErrorEnvelope` до неё не существуют. В терминах Cargo требование —
-  `>=0.7.1, <0.8.0` — нижняя граница растёт, верхняя остаётся в
-  пределах 0.7.x.
+- Минимальная версия ядра `ktav` — **0.8.0**; тесты соответствия
+  закреплены на spec **v0.8.0**.
+
+- **Сериализация чисел с плавающей точкой теперь надёжно сохраняет
+  round-trip PHP-значений.** После ktav 0.6.4 числа кодируются через
+  round-trip-представление `json_encode()`, а не ограниченное настройкой
+  точности преобразование `(string)`; целые значения float сохраняют
+  десятичную точку.
+
 
 >>>>> lang=zh
   信封把写入器的两种拒绝分别命名:能指出问题节点位置时为
@@ -56,12 +62,33 @@
 
 ### 变更
 
-- **错误消息文本已改变。** 它们现在由信封的字段重新拼装,而不是从核心的
-  `Display` 输出透传。此前按消息字符串匹配的调用方需要改为匹配
-  `getError()` / `getReason()` —— 这正是本次改动的目的。`getMessage()`
-  仍然人类可读,且绝不会是原始 JSON。
+- **错误消息优先使用核心提供的 `message` 字段。** 对于 0.8.0 核心,这会
+  原样保留其 `Display` 输出;不含该字段的旧核心则回退到由信封字段构造的
+  消息。`getMessage()` 仍然人类可读,且绝不会是原始 JSON。
 
-- `ktav` 核心的最低版本提升至 **0.7.1**:在此之前 `format_str` 与
-  `ErrorEnvelope` 都不存在。用 Cargo 的语义表述即 `>=0.7.1, <0.8.0` ——
-  下限上移,上限仍留在 0.7.x 之内。
+- `ktav` 核心最低版本为 **0.8.0**;一致性测试固定使用 spec **v0.8.0**。
+
+- **浮点数序列化现在能可靠往返 PHP 浮点值。** ktav 0.6.4 之后,浮点数改用
+  `json_encode()` 的往返安全表示编码,不再使用受 PHP 精度设置影响的
+  `(string)` 转换;整数值的 float 会保留小数标记。
+
+- `crates/cabi` 改为单次调用 `ktav::declare_cabi!()`(ktav 的 `cabi`
+  特性),取代手写的 C ABI 垫片;导出的符号集不变,因此绑定 API 不受
+  影响。依赖下限提升至 **0.8.0**,spec 子模块重新固定到 `v0.8.0`
+  (新增 § 5.2:带多余前导零的十进制数解析为 String,而非 Integer)。
+- 包版本升至 **0.8.0**,与核心和规范同步;预编译库的回退下载现在指向
+  `v0.8.0` 发布资产。
+- 跟踪 ktav 0.7.0 与 spec 0.7.0:带引号的键(§ 5.3.3)与 inline 值中的
+  `\uXXXX` 转义(§ 3.7.1)来自 Rust 内核,跨越 FFI 边界完全透明 ——
+  绑定源码除依赖升级外未改动。MSRV 提升至 Rust 1.71(ktav 0.7 的真实
+  MSRV);`[package.metadata.ktav] spec-version` 现为 "0.7.0"。
+- 一致性测试套件指向 `spec/versions/0.8/tests`(子模块重新固定到
+  `0.8.0` 之后,它一直静默读取过期的 `0.7` 语料——路径是硬编码的,
+  并非从固定版本推导而来),并执行语料中的每个类别:
+  `unrepresentable/` 与 `parseable-unrepresentable/`(写入方必须拒绝
+  fixture 的值 / 可正常解析但规范输出必须拒绝的值),以及新增的
+  `strict-lossy/`(`loads()` 必须等于 lax 值,`loadsStrict()` 必须以
+  匹配的原因、body 与规范形式抛出异常)。一个 guard 测试会在语料中
+  出现无法识别的类别目录时使构建失败,以防止这个问题再次悄然发生。
+### 已知限制
 

@@ -72,24 +72,27 @@ itself — for the latter see
 
 ### Changed
 
-- **Error messages have changed.** They are now reconstructed from the
-  envelope's fields rather than passed through from the core's
-  `Display` output. Callers matching on message strings will need to
-  match on `getError()` / `getReason()` instead — which is the point of
-  the change. `getMessage()` remains human-readable and is never the
-  raw JSON.
+- **Error messages now use the core's `message` when provided.** With
+  core 0.8.0 this preserves its `Display` output verbatim; older cores
+  without that field fall back to a message built from the envelope.
+  `getMessage()` remains human-readable and is never the raw JSON.
 
-- Minimum `ktav` core raised to **0.7.1**: `format_str` and
-  `ErrorEnvelope` do not exist before it. In Cargo terms the
-  requirement is `>=0.7.1, <0.8.0` — the floor rises, the ceiling stays
-  inside 0.7.x.
+- Minimum `ktav` core is **0.8.0**; the conformance tests are pinned to
+  spec **v0.8.0**.
+
+- **Float serialization now round-trips PHP floats reliably.** After
+  ktav 0.6.4, floats are encoded through `json_encode()`'s
+  round-trip-safe representation instead of PHP's precision-limited
+  `(string)` conversion; integral floats retain a decimal marker.
+
 
 - Migrated `crates/cabi` to a single `ktav::declare_cabi!()` invocation
   (ktav's `cabi` feature) instead of a hand-rolled C ABI shim; the
   exported symbol surface is unchanged, so the PHP API is unaffected.
-  Dependency floor raised to **0.8.0**, spec submodule re-pinned to
+  Dependency floor is **0.8.0**, and the spec submodule is pinned to
   `v0.8.0` (adds § 5.2: a decimal with a redundant leading zero parses
   as a String, not an Integer).
+
 - The package version moves to **0.8.0**, in step with the core and the
   specification; the prebuilt-library download fallback now targets the
   `v0.8.0` release asset.
