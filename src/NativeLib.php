@@ -140,9 +140,15 @@ final class NativeLib
         $ffi = self::ffi();
         $len = strlen($input);
 
-        // Allocate input buffer in native land and copy into it.
-        $srcBuf = $len > 0 ? $ffi->new("uint8_t[$len]", false) : null;
-        if ($srcBuf !== null) {
+        // Allocate a LIVE input buffer of at least one byte. Rust's
+        // `slice::from_raw_parts(src, src_len)` (rust/src/cabi/declare.rs:76,110)
+        // requires a non-null, aligned pointer EVEN WHEN src_len is 0 —
+        // debug builds abort on NULL-with-len-0 (release builds only
+        // hide it). The pad byte is never copied into or out of; the
+        // logical length passed to the callee stays the ORIGINAL $len.
+        $alloc = max(1, $len);
+        $srcBuf = $ffi->new("uint8_t[$alloc]", false);
+        if ($len > 0) {
             \FFI::memcpy($srcBuf, $input, $len);
         }
 
