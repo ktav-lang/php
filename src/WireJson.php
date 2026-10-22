@@ -35,7 +35,8 @@ final class WireJson
     /** @param mixed $value */
     public static function encode($value): string
     {
-        $wrapped = self::wrap($value);
+        $active = [];
+        $wrapped = self::wrap($value, $active);
         return json_encode(
             $wrapped,
             JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
@@ -87,7 +88,7 @@ final class WireJson
      * @param mixed $v
      * @return mixed
      */
-    private static function wrap($v)
+    private static function wrap($v, array &$active)
     {
         if ($v === null || is_bool($v) || is_string($v)) {
             return $v;
@@ -117,8 +118,26 @@ final class WireJson
         }
         if (is_array($v)) {
             $out = [];
-            foreach ($v as $k => $child) {
-                $out[$k] = self::wrap($child);
+            foreach ($v as $k => $_) {
+                $ref = \ReflectionReference::fromArrayElement($v, $k);
+                if ($ref === null) {
+                    $out[$k] = self::wrap($v[$k], $active);
+                    continue;
+                }
+                $id = $ref->getId();
+                if (isset($active[$id])) {
+                    throw KtavException::fromEnvelope([
+                        'error' => 'Message',
+                        'reason' => null,
+                        'message' => 'cyclic PHP reference cannot be encoded as JSON',
+                    ]);
+                }
+                $active[$id] = true;
+                try {
+                    $out[$k] = self::wrap($v[$k], $active);
+                } finally {
+                    unset($active[$id]);
+                }
             }
             return $out;
         }

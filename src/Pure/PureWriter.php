@@ -74,13 +74,29 @@ final class PureWriter
      * `emitCanonical([]) === ''` (§ 5.9.0 empty Object root; pinned by
      * ValueModelSpec against rust render.rs emit_root).
      *
+     * Cyclic PHP references are rejected as a Message error. Reference
+     * ids are binary strings and tracked on the active path per call.
+     *
      * @param mixed $v
      * @param bool $isRoot true only for the renderDocument root call
      * @return mixed
      */
     public static function toInternal($v, bool $isRoot = false)
     {
+        $activeReferences = [];
+        $activeObjects = new \SplObjectStorage();
+        return self::toInternalInner($v, $isRoot, $activeReferences, $activeObjects);
+    }
+
+    /**
+     * @param mixed $v
+     * @param array<string, true> $active
+     * @return mixed
+     */
+    private static function toInternalInner($v, bool $isRoot, array &$active, \SplObjectStorage $activeObjects)
+    {
         if ($v instanceof PureObject || $v instanceof PureList) {
+            self::assertAcyclicInternal($v, $activeObjects);
             return $v;
         }
         if (!is_array($v)) {
@@ -101,16 +117,48 @@ final class PureWriter
         }
         if (self::isList($v)) {
             $out = new PureList();
-            foreach ($v as $child) {
-                $out->items[] = self::toInternal($child);
+            foreach ($v as $k => $_) {
+                $out->items[] = self::child($v, $k, $active, $activeObjects);
             }
             return $out;
         }
         $obj = new PureObject();
-        foreach ($v as $k => $child) {
-            $obj->pairs[(string) $k] = self::toInternal($child);
+        foreach ($v as $k => $_) {
+            $obj->pairs[(string) $k] = self::child($v, $k, $active, $activeObjects);
         }
         return $obj;
+    }
+
+    /**
+     * Convert element `$container[$k]`, tracking reference identity so
+     * a cycle edge is caught on the second ACTIVE encounter of its slot id.
+     *
+     * @param array $container
+     * @param int|string $k
+     * @param array<string, true> $active
+     * @return mixed
+     */
+    private static function child(array $container, $k, array &$active, \SplObjectStorage $activeObjects)
+    {
+        $ref = \ReflectionReference::fromArrayElement($container, $k);
+        if ($ref === null) {
+            // Non-reference slot: cannot be part of a cycle.
+            return self::toInternalInner($container[$k], false, $active, $activeObjects);
+        }
+        $id = $ref->getId();
+        if (isset($active[$id])) {
+            PureKtav::failEnvelope([
+                'error' => 'Message',
+                'reason' => null,
+                'message' => 'cyclic PHP reference cannot be rendered as a Ktav document',
+            ]);
+        }
+        $active[$id] = true;
+        try {
+            return self::toInternalInner($container[$k], false, $active, $activeObjects);
+        } finally {
+            unset($active[$id]);
+        }
     }
 
     /**
@@ -163,6 +211,32 @@ final class PureWriter
         $w = new self($canonical, $force);
         $w->emitRoot($root);
         return $w->out;
+    }
+
+    /** Validate mutable internal nodes by active path; shared DAGs remain valid. */
+    private static function assertAcyclicInternal($value, \SplObjectStorage $active)
+    {
+        if (!($value instanceof PureObject) && !($value instanceof PureList)) {
+            return;
+        }
+        if ($active->contains($value)) {
+            PureKtav::failEnvelope([
+                'error' => 'Message',
+                'reason' => null,
+                'message' => 'cyclic internal value cannot be rendered as a Ktav document',
+            ]);
+        }
+        $active->attach($value);
+        try {
+            $children = $value instanceof PureObject ? $value->pairs : $value->items;
+            foreach ($children as $child) {
+                if ($child instanceof PureObject || $child instanceof PureList) {
+                    self::assertAcyclicInternal($child, $active);
+                }
+            }
+        } finally {
+            $active->detach($value);
+        }
     }
 
     /** @return void */

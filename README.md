@@ -24,19 +24,23 @@ need `ffi.enable=1` in `php.ini`).
 composer require ktav-lang/ktav
 ```
 
-The package needs only `php` and `ext-json` — a pure-only install
-requires **no** `ext-ffi`. The pure PHP backend (`Ktav\PureBackend`)
-works with no native library at all — including when `ext-ffi` is
-disabled.
+The pure backend is an explicit opt-in; the default remains native. For a standalone pure consumer:
 
-The **default** backend is native (FFI over the Rust core) and does
-require `ext-ffi`. Calling a native operation without the extension
-fails with a clear `KtavException` ('PHP FFI extension is required').
-On a dev checkout whose platform requirements are skipped, use
-`composer install --ignore-platform-req=ext-ffi` — that flag is a
-development convenience only, never a consumer install route.
+```php
+<?php
+require 'vendor/autoload.php';
 
-Native assets in this release are built from Rust ktav 0.8.1.
+use Ktav\PureBackend;
+
+$value = PureBackend::loads("greeting: hello\n");
+echo PureBackend::dumps($value);
+```
+
+Requires PHP 7.4+ (`^7.4 || ^8.0`), enabled standard `ext-json`, and no `mbstring`; there are no third-party runtime Composer packages. Composer distributes and autoloads the package; installation may fetch it. Pure parse, render, formatting, and error paths need no `ext-ffi`, native/WASM library, network, subprocess, or fallback. `ReflectionReference` and SPL are built-in PHP facilities, not separate installs.
+
+The **default** backend remains native (FFI over the Rust core). It requires enabled `ext-ffi` and a platform-compatible `ktav_cabi` binary, resolved using `KTAV_LIB_PATH` or downloaded and cached on first use. Consumers do not need a Rust compiler. Native first-use download needs network; pure operations do not. No platform-requirement waiver is needed for pure installation.
+
+Build, test, and documentation tools (Rust Cargo, Kahlan, and Node/polydoc) are maintainer tooling, not consumer runtime dependencies. Native assets in this release are built from Rust ktav 0.8.1.
 
 ## Quick start
 
@@ -116,26 +120,27 @@ Both backends are always present: choose per call
 global backend flag and no fallback in either direction — choosing
 pure never touches FFI, choosing native never runs PHP parsing.
 
-The operation surface mirrors `Ktav` exactly: `loads`, `loadsStrict`,
-`dumps`, `dumpsForceStrings`, `emitCanonical`, `format`,
-`canonicalFromSource`, plus `version()` (a pure-backend marker, never
-a native version) and `isAvailable()`. Errors are the same
-`KtavException` nine-field envelopes with byte-offset spans and
-1-based line numbers. The value model matches the native path:
-assoc array = Object, sequential list = Array, `['$i' => '<digits>']`
+The pure backend exposes these parsing, writing and formatting operations:
+`loads`, `loadsStrict`, `dumps`, `dumpsForceStrings`, `emitCanonical`,
+`format` and `canonicalFromSource`. The native API also has
+`Ktav::nativeVersion()`; pure `version()` is a pure-backend marker, never
+a native version. `isAvailable()` is always `true` because no native
+artifact is needed.
+
+Errors use the `KtavException` ten-field envelope, with byte-offset
+spans and 1-based line numbers. The value model maps associative arrays
+to Object and sequential arrays to Array. Use `['$i' => '<digits>']`
 for big Integers and `['$f' => '<text>']` for exact Float payloads.
 
 Documented differences:
 
-- `InvalidUtf8` errors follow the Rust raw envelope: a line number,
-  an offset-bearing message and a nonempty byte span over the
-  malformed bytes.
-- `emitCanonical` loses empty Object/Array identity the same way the
-  native `dumps` does (an empty PHP array is an empty assoc array);
-  use `canonicalFromSource` when empty-compound identity must survive.
-- The pure backend requires only `ext-json` (always compiled in) —
-  no FFI extension and no native binary; `PureBackend::isAvailable()`
-  is always `true`.
+- `InvalidUtf8` errors include a line number, an offset-bearing message
+  and a nonempty byte span over malformed bytes.
+- PHP arrays cannot retain empty Object/Array identity. At the root,
+  `[]` is treated as Object; nested `[]` is treated as Array. Use
+  `canonicalFromSource` when that identity must survive.
+- Pure mode needs enabled standard `ext-json`, but no third-party
+  runtime Composer packages, FFI or native binary.
 
 ### Formatting
 
@@ -252,11 +257,10 @@ it needs no native library, even with `ext-ffi` disabled.
 
 ## Runtime support
 
-- Supported PHP: 7.4 / 8.0 / 8.1 / 8.2 / 8.3+. CI tests PHP 7.4, 8.2 and 8.3 on Linux, macOS and Windows.
+- PHP requirement: `^7.4 || ^8.0`; pure mode needs enabled standard `ext-json` only, with no third-party runtime Composer packages. Rust Cargo, Kahlan (`require-dev`) and Node/polydoc are maintainer tools, not consumer runtime dependencies.
+- Native mode alone needs enabled `ext-ffi` and a compatible `ktav_cabi` platform binary. Native Linux binaries require glibc 2.17+; this does not apply to pure mode. No Rust compiler is needed by consumers.
 - Prebuilt binaries for: `linux/amd64`, `linux/arm64`, `darwin/amd64`,
   `darwin/arm64`, `windows/amd64`, `windows/arm64`.
-- Linux distros must use glibc 2.17+ (zigbuild baseline). Alpine
-  (musl) support is planned.
 
 ## License
 

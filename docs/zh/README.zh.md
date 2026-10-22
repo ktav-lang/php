@@ -24,17 +24,23 @@
 composer require ktav-lang/ktav
 ```
 
-本包只需 `php` 与 `ext-json` —— 纯后端安装**无需** `ext-ffi`。
-纯 PHP 后端（`Ktav\PureBackend`）完全无需原生库即可工作，包括
-`ext-ffi` 被禁用时。
+纯后端需显式选择；默认仍是原生后端。独立纯模式示例：
 
-**默认后端**是原生的（通过 FFI 调用 Rust 内核），需要 `ext-ffi`。
-在没有该扩展时调用原生操作会抛出清晰的 `KtavException`
-（'PHP FFI extension is required'）。在跳过平台依赖的 dev 检出中，
-可使用 `composer install --ignore-platform-req=ext-ffi` —— 该参数
-只是开发便利，绝不是使用者的安装方式。
+```php
+<?php
+require 'vendor/autoload.php';
 
-本版本的原生资源基于 Rust ktav 0.8.1 构建。
+use Ktav\PureBackend;
+
+$value = PureBackend::loads("greeting: hello\n");
+echo PureBackend::dumps($value);
+```
+
+需要 PHP 7.4+（`^7.4 || ^8.0`）和已启用的标准 `ext-json`；不需要 `mbstring`，也没有第三方 Composer 运行时依赖。Composer 负责分发和自动加载；安装时可能下载包。纯解析、渲染、格式化和错误处理无需 `ext-ffi`、原生/WASM 库、网络、子进程或回退。`ReflectionReference` 和 SPL 是 PHP 内置功能，不需单独安装。
+
+**默认后端**仍是原生后端（通过 FFI 调用 Rust 内核）。它需要启用 `ext-ffi` 和平台兼容的 `ktav_cabi` 二进制；通过 `KTAV_LIB_PATH` 查找，或首次使用时下载并缓存。消费者无需 Rust 编译器。首次下载原生二进制需要网络；纯操作不需要网络。纯模式安装无需豁免平台要求。
+
+Rust Cargo、Kahlan 和 Node/polydoc 是维护者的构建、测试和文档工具，不是消费者运行时依赖。本版本的原生资源基于 Rust ktav 0.8.1 构建。
 
 ## 快速开始
 
@@ -113,23 +119,25 @@ $text = Ktav::dumps($doc);
 没有全局后端开关，任何方向都不会静默回退 —— 选择纯模式不会触及
 FFI，选择原生模式也不会执行 PHP 解析。
 
-操作面与 `Ktav` 完全一致：`loads`、`loadsStrict`、`dumps`、
-`dumpsForceStrings`、`emitCanonical`、`format`、
-`canonicalFromSource`，另有 `version()`（纯后端标记，绝不是原生
-版本）与 `isAvailable()`。错误同样是 `KtavException` 九字段信封，
-带字节偏移区间和从 1 开始的行号。值模型与原生路径一致：
-关联数组 = Object，顺序列表 = Array，`['$i' => '<数字>']`
-表示大 Integer，`['$f' => '<文本>']` 表示精确 Float 载荷。
+纯后端提供解析、写入和格式化操作：`loads`、`loadsStrict`、`dumps`、
+`dumpsForceStrings`、`emitCanonical`、`format` 和
+`canonicalFromSource`。原生 API 另有 `Ktav::nativeVersion()`；纯后端的
+`version()` 只是纯模式标记，绝不是原生版本。无需原生资源时，
+`isAvailable()` 始终为 `true`。
+
+错误使用 `KtavException` 十字段信封，包含字节偏移区间和从 1 开始的
+行号。关联数组对应 Object，顺序数组对应 Array。大 Integer 使用
+`['$i' => '<数字>']`，精确 Float 载荷使用 `['$f' => '<文本>']`。
 
 已记录的差异：
 
-- `InvalidUtf8` 错误遵循 Rust 原始信封：行号、带偏移的消息，
-  以及覆盖损坏字节的非空字节区间。
-- `emitCanonical` 与原生 `dumps` 一样会丢失空 Object/Array 的
-  身份（空 PHP 数组即空关联数组）；若需保留空复合结构的身份，
-  请使用 `canonicalFromSource`。
-- 纯后端只需要 `ext-json`（始终内建）—— 无需 FFI 扩展，也无需
-  原生二进制；`PureBackend::isAvailable()` 恒为 `true`。
+- `InvalidUtf8` 错误包含行号、带偏移的消息，以及覆盖损坏字节的
+  非空区间。
+- PHP 数组无法保留空 Object/Array 的身份。根节点的 `[]` 按 Object
+  处理，嵌套的 `[]` 按 Array 处理。若需保留身份，请使用
+  `canonicalFromSource`。
+- 纯模式需要启用标准 `ext-json`，但无需第三方 Composer 运行时依赖、
+  FFI 或原生二进制。
 
 ### 格式化
 
@@ -245,11 +253,10 @@ x.y\.z: v
 
 ## 运行时支持
 
-- 支持的 PHP 版本：7.4 / 8.0 / 8.1 / 8.2 / 8.3+。CI 在 Linux、macOS 和 Windows 上测试 PHP 7.4、8.2 和 8.3。
+- PHP 要求：`^7.4 || ^8.0`；纯模式只需启用标准 `ext-json`，没有第三方 Composer 运行时依赖。Rust Cargo、Kahlan（`require-dev`）和 Node/polydoc 是维护工具，不是消费者运行时依赖。
+- 仅原生模式需要启用 `ext-ffi` 和兼容平台的 `ktav_cabi` 二进制。原生 Linux 二进制要求 glibc 2.17+；纯模式不受此限制。消费者无需 Rust 编译器。
 - 预编译二进制覆盖：`linux/amd64`、`linux/arm64`、`darwin/amd64`、
   `darwin/arm64`、`windows/amd64`、`windows/arm64`。
-- Linux 发行版需 glibc 2.17+（zigbuild 基线）。Alpine（musl）
-  支持已在计划中。
 
 ## 许可证
 

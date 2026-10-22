@@ -208,40 +208,35 @@ jobs:
           KTAV_LIB_PATH: ${{ runner.temp }}/ktav-pure-no-artifact/libktav_cabi.so
         run: vendor/bin/kahlan --spec=tests/Pure --reporter=verbose
 
-  # Packaged-import proof: installs the package into a CI-owned
-  # consumer directory through a REAL COPY (path repository with
-  # options.symlink=false — not a symlink into the checkout), then
-  # imports through the documented public API with the ffi extension
-  # actually ABSENT (':ffi' removes the shared extension on Linux):
-  # the pure backend must work and the native facade must fail with a
-  # CLEAR KtavException naming FFI. This is the
-  # packaged/no-native viability gate (brief, correctness acceptance 4).
+  # Packaged-consumer proof: Composer installs a real copy with no dev
+  # tools or third-party runtime packages. The standalone assertion runs
+  # only through that installed package, without FFI or mbstring.
   test-packaged-pure:
-    name: 'packaged pure import (ffi ABSENT, PHP 8.2)'
+    name: 'packaged standalone pure (no FFI/mbstring, PHP ${{ matrix.php }})'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['7.4', '8.2']
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP (json only, ffi disabled)
+      - name: Setup PHP (json only; FFI and mbstring disabled)
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          # The colon prefix disables ffi per the setup-php README
-          # (shared extensions are disabled by prefixing with ':').
-          extensions: json, :ffi
+          php-version: ${{ matrix.php }}
+          extensions: json, :ffi, :mbstring
           ini-values: ffi.enable=0
           coverage: none
 
-      # The assert step fails the job if ffi still loads: a found-ffi
-      # grep (exit 0) fails; absent ffi (grep exit 1, inside the if
-      # condition, exempt from set -e) passes.
-      - name: Assert the ffi extension is disabled
+      - name: Assert FFI and mbstring extensions are absent
         shell: bash
         run: |
           set -e
-          if php -m | grep -ix ffi; then echo 'ERROR: ffi extension is still enabled'; exit 1; fi
+          if php -m | grep -ixE 'ffi|mbstring'; then echo 'ERROR: optional extension is still enabled'; exit 1; fi
 
       - name: Install ktav-lang/ktav into a consumer project (real copy)
+        shell: bash
         run: |
           set -e
           CONSUMER=$(mktemp -d)
@@ -257,27 +252,29 @@ jobs:
             '  ],' \
             '  "require": { "ktav-lang/ktav": "@dev" }' \
             '}' > composer.json
-          composer install --no-interaction --no-progress
+          composer install --no-dev --no-interaction --no-progress
           echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
 
-      - name: Packaged pure import works; native fails clearly without FFI
+      - name: Assert installed package pure API without native initialization
+        env:
+          KTAV_LIB_PATH: ${{ runner.temp }}/ktav-packaged-no-native/libktav_cabi.so
+        run: php "$GITHUB_WORKSPACE/tests/PackagedStandaloneCheck.php" "$CONSUMER"
+
+      - name: Native facade refuses operation clearly without FFI
+        env:
+          KTAV_LIB_PATH: ${{ runner.temp }}/ktav-packaged-no-native/libktav_cabi.so
         run: |
-          set -e
-          cd "$CONSUMER"
-          # 1) ffi must be ABSENT, not merely disabled — ffi.enable=0
-          #    is not absence, and NativeLib resolves via
-          #    extension_loaded('ffi') (src/NativeLib.php) before any
-          #    ini check (review3 P2). The colon-prefixed :ffi in the
-          #    Setup PHP step keeps the extension unloaded; these
-          #    assertions hold the precondition.
-          #    The pure backend loads and parses through the documented
-          #    public import.
-          php -d ffi.enable=0 -r "if (extension_loaded('ffi')) { fwrite(STDERR, \"ffi present\"); exit(1); } require 'vendor/autoload.php'; \$v = Ktav\\PureBackend::loads('a: 1'); exit(\$v === ['a' => 1] ? 0 : 1);"
-          # 2) the native facade fails CLEARLY without FFI: a
-          #    KtavException whose message names FFI (NativeLib: 'PHP
-          #    FFI extension is required'). Same absence precondition
-          #    before the try/catch.
-          php -d ffi.enable=0 -r "if (extension_loaded('ffi')) { fwrite(STDERR, \"ffi present\"); exit(1); } require 'vendor/autoload.php'; try { Ktav\\Ktav::loads('a: 1'); fwrite(STDERR, 'native backend unexpectedly worked without FFI'); exit(1); } catch (Ktav\\KtavException \$e) { exit(strpos(\$e->getMessage(), 'FFI') === false ? 1 : 0); }"
+          php -r '
+          if (extension_loaded("ffi")) { exit(1); }
+          require getenv("CONSUMER") . "/vendor/autoload.php";
+          try {
+              Ktav\Ktav::loads("a: 1");
+              fwrite(STDERR, "native backend unexpectedly worked without FFI");
+              exit(1);
+          } catch (Ktav\KtavException $e) {
+              exit(strpos($e->getMessage(), "FFI") === false ? 1 : 0);
+          }
+          '
 
   lint-rust:
     name: rust clippy + fmt
