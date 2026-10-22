@@ -10,10 +10,8 @@ repository = "https://github.com/ktav-lang/php"
 rust-version = "1.71"
 
 [workspace.dependencies]
-# Exact pin (review4 P1#3): every build (CI and release) must resolve
-# the PUBLISHED 0.8.1 core, coherent with the Cargo.lock provenance
-# verification in .github/workflows/ci.yml.
-ktav = "=0.8.1"
+# Minimum core version; CI verifies the resolved release artifact separately.
+ktav = ">=0.8.1, <0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 indexmap = "2"

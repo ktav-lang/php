@@ -115,47 +115,86 @@ jobs:
           KTAV_ENABLED_BACKENDS: native,pure
         run: vendor/bin/kahlan --reporter=verbose
 
-  # Pure-backend-only matrix: NO Rust toolchain, NO cargo build, NO ffi
-  # extension. Proves the pure suites load and pass without the native
-  # library or FFI. KTAV_ENABLED_BACKENDS=pure makes Corpus::backends()
-  # define ZERO native cells, and Corpus::requireNative() SKIPs (never
-  # fails) only for the not-enabled case — every pure cell must pass.
+  # Pure-backend-only matrix: NO Rust toolchain, NO cargo build, NO
+  # native artifact. Proves the pure suites load and pass without the
+  # native library. Linux/Windows images ship ffi as a shared extension,
+  # removed by ':ffi'; macOS compiles it statically, so there the FFI
+  # API being disabled is asserted at runtime instead.
+  # KTAV_ENABLED_BACKENDS=pure makes Corpus::backends() define ZERO
+  # native cells, and Corpus::requireNative() SKIPs (never fails) only
+  # for the not-enabled case — every pure cell must pass.
   # The corpus comes from the pinned spec submodule (recursive checkout
   # below; required SHA 388982118c0d8f767bf283356ac9c9bb50fdc3f5) — a
   # missing corpus FAILS this job, it never skips.
   test-pure:
-    name: pure (no Rust/FFI) ${{ matrix.os }} / PHP ${{ matrix.php }}
+    name: 'pure (no Rust/native artifact) ${{ matrix.os }} / PHP ${{ matrix.php }}'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         php: ["7.4", "8.2", "8.3"]
+        include:
+          - os: ubuntu-latest
+            extensions: 'json, mbstring, :ffi, xdebug'
+            static_ffi: false
+          - os: macos-latest
+            extensions: 'json, mbstring, xdebug'
+            static_ffi: true
+          - os: windows-latest
+            extensions: 'json, mbstring, :ffi, xdebug'
+            static_ffi: false
 
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Setup PHP (no ffi extension)
+      - name: Setup PHP (native-free)
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          # The colon prefix disables ffi per the setup-php README
-          # (shared extensions are disabled by prefixing with ':'),
-          # even where images bundle it.
-          extensions: json, mbstring, :ffi, xdebug
+          # The colon prefix disables ffi per the setup-php README, but
+          # only for SHARED extensions: it works on the Linux/Windows
+          # images where ffi is shared. macOS setup-php PHP builds
+          # compile ffi STATICALLY, so it cannot be unloaded at all;
+          # there ffi.enable=0 (below) makes the FFI API refuse to run,
+          # and this pure job has no Rust artifact to load anyway.
+          extensions: ${{ matrix.extensions }}
           ini-values: ffi.enable=0, xdebug.mode=off
           coverage: xdebug
 
-      # The assert step fails the job if ffi still loads: a found-ffi
-      # grep (exit 0) fails; absent ffi (grep exit 1, inside the if
+      # Linux/Windows: ffi is a shared extension and ':ffi' removed it,
+      # so the strict extension-ABSENT assert holds. A found-ffi grep
+      # (exit 0) fails; absent ffi (grep exit 1, inside the if
       # condition, exempt from set -e) passes.
-      - name: Assert the ffi extension is disabled
+      - name: Assert the ffi extension is absent
+        if: matrix.static_ffi != true
         shell: bash
         run: |
           set -e
           if php -m | grep -ix ffi; then echo 'ERROR: ffi extension is still enabled'; exit 1; fi
+
+      # macOS: встроенный FFI отключён через INI; проверяем реальный отказ API.
+      # Заданный отсутствующий KTAV_LIB_PATH исключает cache/download fallback.
+      - name: Assert the ffi API is runtime-disabled
+        if: matrix.static_ffi == true
+        shell: bash
+        run: |
+          set -e
+          php -r 'if (!extension_loaded("ffi")) { exit(0); } $e = ini_get("ffi.enable"); if (!($e === "0" || $e === "" || $e === false)) { exit(1); } try { FFI::cdef("int x;"); } catch (\Throwable $t) { exit(0); } fwrite(STDERR, "ffi API is usable"); exit(1);'
+
+      # This job has no cargo steps; any native artifact is an accident.
+      - name: Assert no native artifact exists
+        shell: bash
+        run: |
+          set -e
+          for f in \
+            target/release/libktav_cabi.so target/debug/libktav_cabi.so \
+            target/release/libktav_cabi.dylib target/debug/libktav_cabi.dylib \
+            target/release/ktav_cabi.dll target/debug/ktav_cabi.dll ; do
+            test ! -e "$f"
+          done
 
       # composer.json requires only php + ext-json (ext-ffi is a
       # "suggest"), so no platform-req waiver is needed here.
@@ -165,17 +204,20 @@ jobs:
       - name: Kahlan (pure suites only, zero native cells)
         env:
           KTAV_ENABLED_BACKENDS: pure
+          # Отсутствующий файл: native-вызов обязан упасть без скачивания библиотеки.
+          KTAV_LIB_PATH: ${{ runner.temp }}/ktav-pure-no-artifact/libktav_cabi.so
         run: vendor/bin/kahlan --spec=tests/Pure --reporter=verbose
 
   # Packaged-import proof: installs the package into a CI-owned
   # consumer directory through a REAL COPY (path repository with
   # options.symlink=false — not a symlink into the checkout), then
   # imports through the documented public API with the ffi extension
-  # disabled: the pure backend must work and the native facade must
-  # fail with a CLEAR KtavException naming FFI. This is the
+  # actually ABSENT (':ffi' removes the shared extension on Linux):
+  # the pure backend must work and the native facade must fail with a
+  # CLEAR KtavException naming FFI. This is the
   # packaged/no-native viability gate (brief, correctness acceptance 4).
   test-packaged-pure:
-    name: packaged pure import (no FFI, PHP 8.2)
+    name: 'packaged pure import (ffi ABSENT, PHP 8.2)'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
