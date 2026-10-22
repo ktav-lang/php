@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ktav;
 
+use Ktav\Internal\ArrayGraph;
+
 /**
  * JSON ⇄ PHP value bridge. The cabi side speaks JSON with
  * `{"$i":"<digits>"}` / `{"$f":"<text>"}` tagged wrappers around
@@ -35,8 +37,10 @@ final class WireJson
     /** @param mixed $value */
     public static function encode($value): string
     {
-        $active = [];
-        $wrapped = self::wrap($value, $active);
+        if (is_array($value)) {
+            ArrayGraph::assertAcyclic($value);
+        }
+        $wrapped = self::wrap($value);
         return json_encode(
             $wrapped,
             JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
@@ -88,7 +92,7 @@ final class WireJson
      * @param mixed $v
      * @return mixed
      */
-    private static function wrap($v, array &$active)
+    private static function wrap($v)
     {
         if ($v === null || is_bool($v) || is_string($v)) {
             return $v;
@@ -118,26 +122,8 @@ final class WireJson
         }
         if (is_array($v)) {
             $out = [];
-            foreach ($v as $k => $_) {
-                $ref = \ReflectionReference::fromArrayElement($v, $k);
-                if ($ref === null) {
-                    $out[$k] = self::wrap($v[$k], $active);
-                    continue;
-                }
-                $id = $ref->getId();
-                if (isset($active[$id])) {
-                    throw KtavException::fromEnvelope([
-                        'error' => 'Message',
-                        'reason' => null,
-                        'message' => 'cyclic PHP reference cannot be encoded as JSON',
-                    ]);
-                }
-                $active[$id] = true;
-                try {
-                    $out[$k] = self::wrap($v[$k], $active);
-                } finally {
-                    unset($active[$id]);
-                }
+            foreach ($v as $k => $child) {
+                $out[$k] = self::wrap($child);
             }
             return $out;
         }

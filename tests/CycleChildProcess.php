@@ -57,7 +57,7 @@ final class CycleChildProcess
         }
         if (!$stopped) { throw new \RuntimeException('Unable to confirm child stop backend=' . $backend . ' last-marker=' . $lastMarker . ' force-kill-requested=' . ($forceKillSucceeded ? 'yes' : 'no') . '; OS process termination is not guaranteed'); }
         if ($timedOut) { throw new \RuntimeException('Cycle child wall timeout backend=' . $backend . ' last-marker=' . $lastMarker . ' output-tail=' . $captured); }
-        $expected = 'COMPLETE backend=' . $backend . ' cycles=12 controls=' . ($backend === 'pure' ? '21' : '6');
+        $expected = 'COMPLETE backend=' . $backend . ' cycles=12 controls=' . ($backend === 'pure' ? '30' : '15');
         if ($exitCode !== 0 || strpos($captured, $expected) === false) { throw new \RuntimeException('Cycle child failed backend=' . $backend . ' exit=' . $exitCode . ' last-marker=' . $lastMarker . ' expected=' . $expected); }
     }
 }

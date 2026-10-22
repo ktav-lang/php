@@ -74,8 +74,7 @@ final class PureWriter
      * `emitCanonical([]) === ''` (§ 5.9.0 empty Object root; pinned by
      * ValueModelSpec against rust render.rs emit_root).
      *
-     * Cyclic PHP references are rejected as a Message error. Reference
-     * ids are binary strings and tracked on the active path per call.
+     * Cyclic PHP references in arrays are rejected by a recursive-count prepass.
      *
      * @param mixed $v
      * @param bool $isRoot true only for the renderDocument root call
@@ -83,17 +82,18 @@ final class PureWriter
      */
     public static function toInternal($v, bool $isRoot = false)
     {
-        $activeReferences = [];
+        if (is_array($v)) {
+            \Ktav\Internal\ArrayGraph::assertAcyclic($v);
+        }
         $activeObjects = new \SplObjectStorage();
-        return self::toInternalInner($v, $isRoot, $activeReferences, $activeObjects);
+        return self::toInternalInner($v, $isRoot, $activeObjects);
     }
 
     /**
      * @param mixed $v
-     * @param array<string, true> $active
      * @return mixed
      */
-    private static function toInternalInner($v, bool $isRoot, array &$active, \SplObjectStorage $activeObjects)
+    private static function toInternalInner($v, bool $isRoot, \SplObjectStorage $activeObjects)
     {
         if ($v instanceof PureObject || $v instanceof PureList) {
             self::assertAcyclicInternal($v, $activeObjects);
@@ -118,47 +118,15 @@ final class PureWriter
         if (self::isList($v)) {
             $out = new PureList();
             foreach ($v as $k => $_) {
-                $out->items[] = self::child($v, $k, $active, $activeObjects);
+                $out->items[] = self::toInternalInner($_, false, $activeObjects);
             }
             return $out;
         }
         $obj = new PureObject();
         foreach ($v as $k => $_) {
-            $obj->pairs[(string) $k] = self::child($v, $k, $active, $activeObjects);
+            $obj->pairs[(string) $k] = self::toInternalInner($_, false, $activeObjects);
         }
         return $obj;
-    }
-
-    /**
-     * Convert element `$container[$k]`, tracking reference identity so
-     * a cycle edge is caught on the second ACTIVE encounter of its slot id.
-     *
-     * @param array $container
-     * @param int|string $k
-     * @param array<string, true> $active
-     * @return mixed
-     */
-    private static function child(array $container, $k, array &$active, \SplObjectStorage $activeObjects)
-    {
-        $ref = \ReflectionReference::fromArrayElement($container, $k);
-        if ($ref === null) {
-            // Non-reference slot: cannot be part of a cycle.
-            return self::toInternalInner($container[$k], false, $active, $activeObjects);
-        }
-        $id = $ref->getId();
-        if (isset($active[$id])) {
-            PureKtav::failEnvelope([
-                'error' => 'Message',
-                'reason' => null,
-                'message' => 'cyclic PHP reference cannot be rendered as a Ktav document',
-            ]);
-        }
-        $active[$id] = true;
-        try {
-            return self::toInternalInner($container[$k], false, $active, $activeObjects);
-        } finally {
-            unset($active[$id]);
-        }
     }
 
     /**

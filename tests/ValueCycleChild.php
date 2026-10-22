@@ -37,6 +37,43 @@ function cycleControl($backend, $name, $operation, $value, $expected)
     if (call_user_func([$class, 'loads'], $text) !== $expected) { throw new RuntimeException('Control mismatch: ' . $backend . '/' . $name . '/' . $operation); }
     cycleMarker("CASE $backend CONTROL-$name $operation PASS");
 }
+function cycleReferenceId(&$value, $key) { $reference = ReflectionReference::fromArrayElement($value, $key); return $reference === null ? null : bin2hex($reference->getId()); }
+function cycleStrictHandlerControls($backend, $operation)
+{
+    $class = $backend === 'native' ? Ktav::class : PureBackend::class; $deliveries = []; $sentinel = 'restored-' . $backend . '-' . $operation;
+    $previous = static function ($severity, $message) use (&$deliveries, $sentinel) { $deliveries[] = [$severity, $message]; if ($severity === E_USER_WARNING && $message === $sentinel) { return true; } throw new RuntimeException('Unexpected writer warning or handler delivery: ' . $severity . '/' . $message); };
+    set_error_handler($previous, E_ALL);
+    try {
+        cycleMarker("CASE $backend CONTROL-handler-success-$operation BEGIN");
+        $output = call_user_func([$class, $operation], ['ok' => 1]);
+        $expected = $operation === 'dumpsForceStrings' ? ['ok' => '1'] : ['ok' => 1];
+        if (call_user_func([$class, 'loads'], $output) !== $expected) { throw new RuntimeException('Handler success output mismatch'); }
+        $probe = static function () {}; $observed = set_error_handler($probe, E_ALL); restore_error_handler();
+        if ($observed !== $previous || count($deliveries) !== 0) { throw new RuntimeException('Handler not restored after success or warning leaked'); }
+        trigger_error($sentinel, E_USER_WARNING);
+        if (count($deliveries) !== 1 || $deliveries[0] !== [E_USER_WARNING, $sentinel]) { throw new RuntimeException('Restored handler did not receive success sentinel'); }
+        cycleMarker("CASE $backend CONTROL-handler-success-$operation PASS");
+        $deliveries = []; cycleMarker("CASE $backend CONTROL-handler-cycle-$operation BEGIN");
+        cycleAssertExpected($backend, 'mutualCycle', $operation, cycleFactory('mutualCycle'));
+        $observed = set_error_handler($probe, E_ALL); restore_error_handler();
+        if ($observed !== $previous || count($deliveries) !== 0) { throw new RuntimeException('Handler not restored after cycle or warning leaked'); }
+        trigger_error($sentinel, E_USER_WARNING);
+        if (count($deliveries) !== 1 || $deliveries[0] !== [E_USER_WARNING, $sentinel]) { throw new RuntimeException('Restored handler did not receive cycle sentinel'); }
+        cycleMarker("CASE $backend CONTROL-handler-cycle-$operation PASS");
+    } finally { restore_error_handler(); }
+}
+function cycleAliasControl($backend, $operation)
+{
+    $class = $backend === 'native' ? Ktav::class : PureBackend::class; $shared = ['z' => 1, 'a' => [2]]; $alias = &$shared; $root = []; $root['second'] = &$shared; $root['first'] = &$shared;
+    $ids = [cycleReferenceId($root, 'second'), cycleReferenceId($root, 'first')]; $nestedIds = [cycleReferenceId($shared, 'a'), cycleReferenceId($shared['a'], 0)];
+    if ($nestedIds !== [null, null]) { throw new RuntimeException('Unexpected nested reference'); }
+    $beforeRoot = array_keys($root); $expected = $operation === 'dumpsForceStrings' ? ['second' => ['z' => '1', 'a' => ['2']], 'first' => ['z' => '1', 'a' => ['2']]] : ['second' => ['z' => 1, 'a' => [2]], 'first' => ['z' => 1, 'a' => [2]]];
+    cycleMarker("CASE $backend CONTROL-caller-alias-$operation BEGIN"); $text = call_user_func([$class, $operation], $root);
+    if (call_user_func([$class, 'loads'], $text) !== $expected || $shared !== ['z' => 1, 'a' => [2]] || $alias !== ['z' => 1, 'a' => [2]] || array_keys($root) !== $beforeRoot || $root['second'] !== ['z' => 1, 'a' => [2]] || $root['first'] !== ['z' => 1, 'a' => [2]] || [cycleReferenceId($root, 'second'), cycleReferenceId($root, 'first')] !== $ids || [cycleReferenceId($shared, 'a'), cycleReferenceId($shared['a'], 0)] !== $nestedIds) { throw new RuntimeException('Caller alias graph changed'); }
+    $alias['z'] = 9;
+    if ($root['second']['z'] !== 9 || $root['first']['z'] !== 9) { throw new RuntimeException('Caller aliases no longer linked'); }
+    cycleMarker("CASE $backend CONTROL-caller-alias-$operation PASS");
+}
 $backend = isset($argv[1]) ? $argv[1] : '';
 if (!in_array($backend, ['pure', 'native'], true)) { fwrite(STDERR, "backend must be pure or native\n"); exit(2); }
 if ($backend === 'native') {
@@ -57,6 +94,8 @@ foreach ($operations as $operation) {
     cycleControl($backend, 'shared-dag', $operation, $dag, $expected); unset($dag, $shared); $controls++;
     $equal = ['a' => ['n' => 1], 'b' => ['n' => 1]]; $expected = $operation === 'dumpsForceStrings' ? ['a' => ['n' => '1'], 'b' => ['n' => '1']] : $equal;
     cycleControl($backend, 'equal-independent', $operation, $equal, $expected); $controls++;
+    cycleAliasControl($backend, $operation); $controls++;
+    cycleStrictHandlerControls($backend, $operation); $controls += 2;
 }
 if ($backend === 'pure') {
     foreach ([new PureObject(), new PureList()] as $index => $node) {

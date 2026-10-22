@@ -74,31 +74,6 @@ jobs:
             if [ "$status" -ne 0 ]; then result=1; fi
           done
           exit "$result"
-      - name: Bounded reference identity trace
-        if: success() || steps.ordinary.outcome == 'failure'
-        shell: bash
-        run: |
-          set -o pipefail
-          mkdir -p "$RUNNER_TEMP/cycle-diagnostic"
-          timeout --kill-after=5s 30s php -d memory_limit=128M -d max_execution_time=20 scripts/ci/CycleReferenceTrace.php 2>&1 | tee "$RUNNER_TEMP/cycle-diagnostic/reference-trace.log"
-      - name: Focused Kahlan instrumentation comparison
-        if: success() || steps.ordinary.outcome == 'failure'
-        shell: bash
-        env:
-          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
-        run: |
-          set +e
-          mkdir -p "$RUNNER_TEMP/cycle-diagnostic"
-          result=0
-          for backend in pure native; do
-            echo "INSTRUMENTED backend=$backend"
-            KTAV_CYCLE_BACKEND="$backend" KTAV_ENABLED_BACKENDS="$backend" KTAV_LIB_PATH="$KTAV_LIB_PATH" timeout --kill-after=5s 20s php -d memory_limit=128M -d max_execution_time=15 vendor/bin/kahlan --spec=scripts/ci/CycleInstrumentationSpec.php --reporter=verbose >"$RUNNER_TEMP/cycle-diagnostic/instrumented-$backend.log" 2>&1
-            status=$?
-            cat "$RUNNER_TEMP/cycle-diagnostic/instrumented-$backend.log"
-            echo "INSTRUMENTED-EXIT backend=$backend status=$status"
-            if [ "$status" -ne 0 ]; then result=1; fi
-          done
-          exit "$result"
       - name: Upload cycle diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
