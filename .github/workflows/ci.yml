@@ -308,7 +308,8 @@ jobs:
         run: composer install --prefer-dist --no-progress
 
       - name: Sanity assert PHP int width
-        run: php -r 'exit(PHP_INT_SIZE === 8 ? 0 : 1);'
+        run: |
+          php -r 'exit(PHP_INT_SIZE === 8 ? 0 : 1);'
 
       - name: Empty-input regression against the DEBUG library
         env:
@@ -321,4 +322,5 @@ jobs:
       - name: Assert the loaded native reports 0.8.1
         env:
           KTAV_LIB_PATH: ${{ github.workspace }}/target/debug/libktav_cabi.so
-        run: php -r "require 'vendor/autoload.php'; exit(\\Ktav\\Ktav::nativeVersion() === '0.8.1' ? 0 : 1);"
+        run: |
+          php -r "require 'vendor/autoload.php'; exit(\\Ktav\\Ktav::nativeVersion() === '0.8.1' ? 0 : 1);"
