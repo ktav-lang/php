@@ -1,6 +1,6 @@
 {
     "name": "ktav-lang/ktav",
-    "description": "PHP bindings for Ktav — a plain configuration format with three rules, zero indentation, and no required quoting (quoted keys are supported). FFI over the reference Rust crate; no extension compilation on the consumer side.",
+    "description": "PHP bindings for Ktav — a plain configuration format with three rules, zero indentation, and no required quoting (quoted keys are supported). FFI over the reference Rust crate (default) plus a full pure-PHP parser/writer backend (requires only ext-json, no FFI or native binary); no extension compilation on the consumer side.",
     "type": "library",
     "license": "MIT OR Apache-2.0",
     "homepage": "https://github.com/ktav-lang/php",
@@ -20,8 +20,10 @@
     ],
     "require": {
         "php": "^7.4 || ^8.0",
-        "ext-ffi": "*",
         "ext-json": "*"
+    },
+    "suggest": {
+        "ext-ffi": "Required only for the default native backend; the pure backend (Ktav\\PureBackend) needs none."
     },
     "require-dev": {
         "kahlan/kahlan": "^5.2 || ^6.0"

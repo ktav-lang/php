@@ -15,7 +15,7 @@
 无需编译 PHP 扩展，也无需 PECL，普通 Composer 依赖即可，
 原生二进制在首次调用时下载。
 
-需要 **PHP 7.4+** 并启用 `ext-ffi`（CLI 默认开启；Web SAPI
+需要 **PHP 7.4+** 和 `ext-json`；仅默认原生后端需要 `ext-ffi`（CLI 默认开启；Web SAPI
 需要在 `php.ini` 中设置 `ffi.enable=1`）。
 
 ## 安装
@@ -23,6 +23,18 @@
 ```bash
 composer require ktav-lang/ktav
 ```
+
+本包只需 `php` 与 `ext-json` —— 纯后端安装**无需** `ext-ffi`。
+纯 PHP 后端（`Ktav\PureBackend`）完全无需原生库即可工作，包括
+`ext-ffi` 被禁用时。
+
+**默认后端**是原生的（通过 FFI 调用 Rust 内核），需要 `ext-ffi`。
+在没有该扩展时调用原生操作会抛出清晰的 `KtavException`
+（'PHP FFI extension is required'）。在跳过平台依赖的 dev 检出中，
+可使用 `composer install --ignore-platform-req=ext-ffi` —— 该参数
+只是开发便利，绝不是使用者的安装方式。
+
+本版本的原生资源基于 Rust ktav 0.8.1 构建。
 
 ## 快速开始
 
@@ -92,6 +104,32 @@ $text = Ktav::dumps($doc);
 结果经由 `loads` 解析回来仍是同一组 String 标量 ——
 当下游消费方只接受字符串值时，
 这很有用。
+
+## 纯 PHP 后端
+
+`Ktav\PureBackend` 是 Ktav 的纯 PHP 完整解析器与写入器实现，
+不加载原生库、WASM 模块或子进程。两个后端始终同时可用：每次调用
+显式选择（`PureBackend::loads($src)` 或 `Ktav::loads($src)`）。
+没有全局后端开关，任何方向都不会静默回退 —— 选择纯模式不会触及
+FFI，选择原生模式也不会执行 PHP 解析。
+
+操作面与 `Ktav` 完全一致：`loads`、`loadsStrict`、`dumps`、
+`dumpsForceStrings`、`emitCanonical`、`format`、
+`canonicalFromSource`，另有 `version()`（纯后端标记，绝不是原生
+版本）与 `isAvailable()`。错误同样是 `KtavException` 九字段信封，
+带字节偏移区间和从 1 开始的行号。值模型与原生路径一致：
+关联数组 = Object，顺序列表 = Array，`['$i' => '<数字>']`
+表示大 Integer，`['$f' => '<文本>']` 表示精确 Float 载荷。
+
+已记录的差异：
+
+- `InvalidUtf8` 错误遵循 Rust 原始信封：行号、带偏移的消息，
+  以及覆盖损坏字节的非空字节区间。
+- `emitCanonical` 与原生 `dumps` 一样会丢失空 Object/Array 的
+  身份（空 PHP 数组即空关联数组）；若需保留空复合结构的身份，
+  请使用 `canonicalFromSource`。
+- 纯后端只需要 `ext-json`（始终内建）—— 无需 FFI 扩展，也无需
+  原生二进制；`PureBackend::isAvailable()` 恒为 `true`。
 
 ### 格式化
 
@@ -169,6 +207,8 @@ try {
 `['big' => ['$i' => '9999999999999999999']]` —— 与 PHP 和原生侧之间的
 wire 信封相同。
 
+`Ktav\PureBackend`（纯 PHP）使用相同的值模型与相同的 `'$i'` / `'$f'` 约定。
+
 ## 键的转义
 
 自 spec 0.6.4 起，键段内的字面量 `.` 或 `:`
@@ -198,6 +238,10 @@ x.y\.z: v
 
 `<userCache>` 在 Windows 上是 `%LOCALAPPDATA%`，macOS 上是
 `~/Library/Caches`，Linux 上是 `$XDG_CACHE_HOME` 或 `~/.cache`。
+
+版本 0.8.1 的原生资源按上述步骤解析。覆盖路径与缓存的二进制在加载时会被校验：加载的库必须报告版本 0.8.1，否则抛出 KtavException 并指明期望与实际版本。纯 PHP 后端
+（`Ktav\PureBackend`）完全绕过这条链 —— 即使 `ext-ffi` 被禁用，
+它也不需要原生库。
 
 ## 运行时支持
 

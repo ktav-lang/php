@@ -18,6 +18,15 @@ their structure, since only leaves are coerced. The result parses back
 through `loads` as the same set of String scalars — useful when a
 downstream consumer needs string-only values.
 
+## Pure PHP backend
+
+`Ktav\PureBackend` is a full parser and writer implementation of Ktav
+in pure PHP — it loads no native library, WASM module or subprocess.
+Both backends are always present: choose per call
+(`PureBackend::loads($src)` vs `Ktav::loads($src)`). There is no
+global backend flag and no fallback in either direction — choosing
+pure never touches FFI, choosing native never runs PHP parsing.
+
 >>>>> lang=ru
 ## API
 
@@ -38,6 +47,16 @@ downstream consumer needs string-only values.
 обратно через `loads` как тот же набор String-скаляров — полезно, когда
 потребителю на выходе нужны только строковые значения.
 
+## Чистый PHP-бэкенд
+
+`Ktav\PureBackend` — полная реализация парсера и писателя Ktav на
+чистом PHP: не загружает нативную библиотеку, WASM-модуль или
+субпроцесс. Оба бэкенда доступны всегда: выбор делается на каждый
+вызов (`PureBackend::loads($src)` против `Ktav::loads($src)`).
+Глобального флага бэкенда нет, отката ни в одну сторону тоже нет —
+выбор чистого режима не касается FFI, выбор нативного не запускает
+PHP-разбор.
+
 >>>>> lang=zh
 ## API
 
@@ -57,4 +76,12 @@ downstream consumer needs string-only values.
 结果经由 `loads` 解析回来仍是同一组 String 标量 ——
 当下游消费方只接受字符串值时，
 这很有用。
+
+## 纯 PHP 后端
+
+`Ktav\PureBackend` 是 Ktav 的纯 PHP 完整解析器与写入器实现，
+不加载原生库、WASM 模块或子进程。两个后端始终同时可用：每次调用
+显式选择（`PureBackend::loads($src)` 或 `Ktav::loads($src)`）。
+没有全局后端开关，任何方向都不会静默回退 —— 选择纯模式不会触及
+FFI，选择原生模式也不会执行 PHP 解析。
 

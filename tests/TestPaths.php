@@ -26,7 +26,27 @@ final class TestPaths
         return $base . '/release/' . $name;
     }
 
+    /**
+     * Conformance corpus root (tests/ of spec v0.8).
+     *
+     * Resolution order: `KTAV_SPEC_DIR` env override (CI / parent
+     * checkouts where the spec submodule sits elsewhere or is pinned
+     * independently) > the worktree's `spec` submodule. Parent CI pins
+     * the submodule to
+     * 388982118c0d8f767bf283356ac9c9bb50fdc3f5, so the default path
+     * works there unchanged.
+     */
     public static function spec(): string
+    {
+        $override = getenv('KTAV_SPEC_DIR');
+        if ($override !== false && $override !== '') {
+            return rtrim($override, '/\\');
+        }
+        return self::REPO . '/spec/versions/0.8/tests';
+    }
+
+    /** The in-repo submodule default (ignores the env override). */
+    public static function specSubmodulePath(): string
     {
         return self::REPO . '/spec/versions/0.8/tests';
     }

@@ -15,7 +15,7 @@ the **[PHP FFI extension](https://www.php.net/manual/en/book.ffi.php)** —
 no PHP extension to compile, no PECL install. Plain Composer
 dependency, the native binary is fetched on first call.
 
-Requires **PHP 7.4+** with `ext-ffi` enabled (default in CLI; web SAPIs
+Requires **PHP 7.4+** with `ext-json`; `ext-ffi` only for the default native backend (enabled by default in CLI; web SAPIs
 need `ffi.enable=1` in `php.ini`).
 
 ## Install
@@ -23,6 +23,20 @@ need `ffi.enable=1` in `php.ini`).
 ```bash
 composer require ktav-lang/ktav
 ```
+
+The package needs only `php` and `ext-json` — a pure-only install
+requires **no** `ext-ffi`. The pure PHP backend (`Ktav\PureBackend`)
+works with no native library at all — including when `ext-ffi` is
+disabled.
+
+The **default** backend is native (FFI over the Rust core) and does
+require `ext-ffi`. Calling a native operation without the extension
+fails with a clear `KtavException` ('PHP FFI extension is required').
+On a dev checkout whose platform requirements are skipped, use
+`composer install --ignore-platform-req=ext-ffi` — that flag is a
+development convenience only, never a consumer install route.
+
+Native assets in this release are built from Rust ktav 0.8.1.
 
 ## Quick start
 
@@ -92,6 +106,36 @@ their textual form via the raw marker (`::`); objects and arrays keep
 their structure, since only leaves are coerced. The result parses back
 through `loads` as the same set of String scalars — useful when a
 downstream consumer needs string-only values.
+
+## Pure PHP backend
+
+`Ktav\PureBackend` is a full parser and writer implementation of Ktav
+in pure PHP — it loads no native library, WASM module or subprocess.
+Both backends are always present: choose per call
+(`PureBackend::loads($src)` vs `Ktav::loads($src)`). There is no
+global backend flag and no fallback in either direction — choosing
+pure never touches FFI, choosing native never runs PHP parsing.
+
+The operation surface mirrors `Ktav` exactly: `loads`, `loadsStrict`,
+`dumps`, `dumpsForceStrings`, `emitCanonical`, `format`,
+`canonicalFromSource`, plus `version()` (a pure-backend marker, never
+a native version) and `isAvailable()`. Errors are the same
+`KtavException` nine-field envelopes with byte-offset spans and
+1-based line numbers. The value model matches the native path:
+assoc array = Object, sequential list = Array, `['$i' => '<digits>']`
+for big Integers and `['$f' => '<text>']` for exact Float payloads.
+
+Documented differences:
+
+- `InvalidUtf8` errors follow the Rust raw envelope: a line number,
+  an offset-bearing message and a nonempty byte span over the
+  malformed bytes.
+- `emitCanonical` loses empty Object/Array identity the same way the
+  native `dumps` does (an empty PHP array is an empty assoc array);
+  use `canonicalFromSource` when empty-compound identity must survive.
+- The pure backend requires only `ext-json` (always compiled in) —
+  no FFI extension and no native binary; `PureBackend::isAvailable()`
+  is always `true`.
 
 ### Formatting
 
@@ -169,6 +213,9 @@ To emit an arbitrary-precision integer, wrap the digit string yourself:
 `['big' => ['$i' => '9999999999999999999']]` — same envelope used on the
 wire between PHP and the native side.
 
+`Ktav\PureBackend` (pure PHP) uses the same value model and the same
+`'$i'` / `'$f'` conventions.
+
 ## Key escaping
 
 Since spec 0.6.4 a literal `.` or `:` inside a key segment is written
@@ -198,6 +245,10 @@ On first call:
 
 `<userCache>` is `%LOCALAPPDATA%` on Windows, `~/Library/Caches` on
 macOS, `$XDG_CACHE_HOME` or `~/.cache` on Linux.
+
+Version 0.8.1 native assets are resolved by the steps above. Overrides and cached binaries are verified at load time: the loaded library must report version 0.8.1 or a KtavException names expected vs actual. The
+pure PHP backend (`Ktav\PureBackend`) bypasses this entire chain —
+it needs no native library, even with `ext-ffi` disabled.
 
 ## Runtime support
 

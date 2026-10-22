@@ -16,7 +16,7 @@ the **[PHP FFI extension](https://www.php.net/manual/en/book.ffi.php)** —
 no PHP extension to compile, no PECL install. Plain Composer
 dependency, the native binary is fetched on first call.
 
-Requires **PHP 7.4+** with `ext-ffi` enabled (default in CLI; web SAPIs
+Requires **PHP 7.4+** with `ext-json`; `ext-ffi` only for the default native backend (enabled by default in CLI; web SAPIs
 need `ffi.enable=1` in `php.ini`).
 
 >>>>> lang=ru
@@ -37,7 +37,7 @@ PHP-биндинги к [формату конфигурации Ktav](https://g
 ничего компилировать не надо, никакого PECL. Обычная
 Composer-зависимость, нативный бинарь скачивается при первом вызове.
 
-Требуется **PHP 7.4+** с включённым `ext-ffi` (по умолчанию в CLI; для
+Требуется **PHP 7.4+** с `ext-json`; `ext-ffi` — только для нативного бэкенда по умолчанию (включён в CLI по умолчанию; для
 веб-SAPI нужен `ffi.enable=1` в `php.ini`).
 
 >>>>> lang=zh
@@ -58,6 +58,6 @@ Composer-зависимость, нативный бинарь скачивае�
 无需编译 PHP 扩展，也无需 PECL，普通 Composer 依赖即可，
 原生二进制在首次调用时下载。
 
-需要 **PHP 7.4+** 并启用 `ext-ffi`（CLI 默认开启；Web SAPI
+需要 **PHP 7.4+** 和 `ext-json`；仅默认原生后端需要 `ext-ffi`（CLI 默认开启；Web SAPI
 需要在 `php.ini` 中设置 `ffi.enable=1`）。
 

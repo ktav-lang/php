@@ -15,6 +15,9 @@ To emit an arbitrary-precision integer, wrap the digit string yourself:
 `['big' => ['$i' => '9999999999999999999']]` — same envelope used on the
 wire between PHP and the native side.
 
+`Ktav\PureBackend` (pure PHP) uses the same value model and the same
+`'$i'` / `'$f'` conventions.
+
 >>>>> lang=ru
 ## Маппинг типов
 
@@ -32,6 +35,8 @@ wire between PHP and the native side.
 `['big' => ['$i' => '9999999999999999999']]` — тот же конверт, которым
 нативная сторона и PHP обмениваются по проводу.
 
+`Ktav\PureBackend` (чистый PHP) использует ту же модель значений и те же соглашения `'$i'` / `'$f'`.
+
 >>>>> lang=zh
 ## 类型映射
 
@@ -48,4 +53,6 @@ wire between PHP and the native side.
 要输出任意精度整数，请自行包装数字字符串：
 `['big' => ['$i' => '9999999999999999999']]` —— 与 PHP 和原生侧之间的
 wire 信封相同。
+
+`Ktav\PureBackend`（纯 PHP）使用相同的值模型与相同的 `'$i'` / `'$f'` 约定。
 

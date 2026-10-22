@@ -13,6 +13,28 @@ itself — for the latter see
 
 ## Unreleased
 
+### 0.8.1
+
+#### Added
+
+- **Pure-PHP backend** — a full parser AND writer implementation of
+  Ktav 0.8.1 in pure PHP, usable in both directions as a complete
+  alternative to the Rust-backed implementation. Opt in per call via
+  `Ktav\PureBackend` (`loads`, `loadsStrict`, `dumps`,
+  `dumpsForceStrings`, `emitCanonical`, `format`,
+  `canonicalFromSource`, `version()`, `isAvailable()`); the native
+  default `Ktav` facade is unchanged, there is no global backend flag
+  and no silent fallback in either direction. The pure backend
+  requires only `ext-json` — no FFI extension and no native binary
+  download. The same `KtavException` nine-field error envelopes with
+  byte-offset spans are produced on both paths.
+
+#### Changed
+
+- Core upgraded to the published Rust ktav **0.8.1**; the spec is
+  pinned to 0.8.1 (normative corpus 0.8.1) and native assets are
+  built from it.
+
 ## 0.8.0 — 2026-09-24
 
 ### Added

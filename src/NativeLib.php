@@ -15,7 +15,7 @@ namespace Ktav;
 final class NativeLib
 {
     /** Version of `ktav_cabi` this build expects. Bump per release. */
-    public const LIB_VERSION = '0.8.0';
+    public const LIB_VERSION = '0.8.1';
 
     // PHP-FFI knows uint8_t / size_t as built-in types — no typedefs
     // needed. The previous `typedef unsigned long long size_t` was
@@ -82,7 +82,47 @@ final class NativeLib
                 $e,
             );
         }
+        // Provenance check: an override (KTAV_LIB_PATH / setLibraryPath)
+        // or a stale cache entry may carry an OLD binary; a LIB_VERSION
+        // bump alone would not reject it. Verify the loaded library
+        // reports the expected version before it serves any call.
+        $actual = self::versionFromFfi();
+        if ($actual !== self::LIB_VERSION) {
+            self::$ffi = null;
+            throw new KtavException(
+                'ktav native library version mismatch in ' . $path
+                . ': expected ' . self::LIB_VERSION . ', got ' . $actual
+            );
+        }
         return self::$ffi;
+    }
+
+    /**
+     * `ktav_version()` with the dual string / CData return handling —
+     * used by both {@see version()} and the {@see ffi()} provenance
+     * check (which must not recurse through {@see ffi()} again).
+     */
+    private static function versionFromFfi(): string
+    {
+        $ret = self::$ffi->ktav_version();
+        if ($ret === null) {
+            return '';
+        }
+        // Some PHP-FFI versions auto-convert `const char *` returns to a
+        // PHP string, others hand back a CData pointer that needs
+        // \FFI::string. Handle both — the test matrix covers 7.4 / 8.2 /
+        // 8.3 and the behavior diverges across them.
+        if (is_string($ret)) {
+            return $ret;
+        }
+        $s = \FFI::string($ret);
+        return $s === false ? '' : $s;
+    }
+
+    public static function version(): string
+    {
+        self::ffi();
+        return self::versionFromFfi();
     }
 
     /**
@@ -150,24 +190,6 @@ final class NativeLib
                 \FFI::free($srcBuf);
             }
         }
-    }
-
-    public static function version(): string
-    {
-        $ffi = self::ffi();
-        $ret = $ffi->ktav_version();
-        if ($ret === null) {
-            return '';
-        }
-        // Some PHP-FFI versions auto-convert `const char *` returns to a
-        // PHP string, others hand back a CData pointer that needs
-        // \FFI::string. Handle both — the test matrix covers 7.4 / 8.2 /
-        // 8.3 and the behavior diverges across them.
-        if (is_string($ret)) {
-            return $ret;
-        }
-        $s = \FFI::string($ret);
-        return $s === false ? '' : $s;
     }
 
     /**

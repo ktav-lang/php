@@ -62,6 +62,20 @@ jobs:
           ini-values: ffi.enable=1, xdebug.mode=off
           coverage: xdebug
 
+      # Provenance (review3 #7): Cargo.lock is generated in CI, NOT
+      # committed. Generate it, then pin the published core: the ktav
+      # package entry must be exactly version 0.8.1 with the crates.io
+      # published checksum — a local-path override, an unreleased
+      # branch or a swapped artifact fails the job here.
+      - name: Generate Cargo.lock and verify the published ktav 0.8.1 pin
+        run: |
+          set -e
+          cargo generate-lockfile
+          ENTRY=$(grep -A2 '^name = "ktav"$' Cargo.lock)
+          echo "$ENTRY"
+          echo "$ENTRY" | grep -q 'version = "0.8.1"'
+          echo "$ENTRY" | grep -q 'checksum = "7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5"'
+
       - name: Build native library
         run: cargo build --release -p ktav-cabi
 
@@ -72,7 +86,116 @@ jobs:
         # xdebug is installed (mode=off, so it doesn't slow specs)
         # purely to satisfy Kahlan's coverage layer probe — `--coverage=0`
         # alone still trips its "no PHPDBG / Xdebug" guard.
+        #
+        # Runs the FULL suite: native suites AND the pure-backend
+        # suites under tests/Pure/ — both backends on every OS/PHP.
+        # KTAV_ENABLED_BACKENDS is explicit: native cells REQUIRE the
+        # cabi artifact (Corpus::requireNative hard-fails when the
+        # backend is enabled but the artifact is missing), pure cells
+        # always run. The corpus runners are fail-closed on the pinned
+        # spec submodule (required SHA
+        # 388982118c0d8f767bf283356ac9c9bb50fdc3f5); `KTAV_SPEC_DIR`
+        # overrides the corpus path if ever needed.
+        env:
+          KTAV_ENABLED_BACKENDS: native,pure
         run: vendor/bin/kahlan --reporter=verbose
+
+  # Pure-backend-only matrix: NO Rust toolchain, NO cargo build, NO ffi
+  # extension. Proves the pure suites load and pass without the native
+  # library or FFI. KTAV_ENABLED_BACKENDS=pure makes Corpus::backends()
+  # define ZERO native cells, and Corpus::requireNative() SKIPs (never
+  # fails) only for the not-enabled case — every pure cell must pass.
+  # The corpus comes from the pinned spec submodule (recursive checkout
+  # below; required SHA 388982118c0d8f767bf283356ac9c9bb50fdc3f5) — a
+  # missing corpus FAILS this job, it never skips.
+  test-pure:
+    name: pure (no Rust/FFI) ${{ matrix.os }} / PHP ${{ matrix.php }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        php: ["7.4", "8.2", "8.3"]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup PHP (no ffi extension)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: json, mbstring, xdebug
+          ini-values: ffi.enable=0, xdebug.mode=off
+          coverage: xdebug
+
+      # composer.json requires only php + ext-json (ext-ffi is a
+      # "suggest"), so no platform-req waiver is needed here.
+      - name: Composer install
+        run: composer install --prefer-dist --no-progress
+
+      - name: Kahlan (pure suites only, zero native cells)
+        env:
+          KTAV_ENABLED_BACKENDS: pure
+        run: vendor/bin/kahlan --spec=tests/Pure --reporter=verbose
+
+  # Packaged-import proof: installs the package into a CI-owned
+  # consumer directory through a REAL COPY (path repository with
+  # options.symlink=false — not a symlink into the checkout), then
+  # imports through the documented public API with the ffi extension
+  # disabled: the pure backend must work and the native facade must
+  # fail with a CLEAR KtavException naming FFI. This is the
+  # packaged/no-native viability gate (brief, correctness acceptance 4).
+  test-packaged-pure:
+    name: packaged pure import (no FFI, PHP 8.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP (json only, ffi disabled)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: json
+          ini-values: ffi.enable=0
+          coverage: none
+
+      - name: Install ktav-lang/ktav into a consumer project (real copy)
+        run: |
+          set -e
+          CONSUMER=$(mktemp -d)
+          cd "$CONSUMER"
+          printf '%s\n' \
+            '{' \
+            '  "repositories": [' \
+            '    {' \
+            '      "type": "path",' \
+            "      \"url\": \"$GITHUB_WORKSPACE\"," \
+            '      "options": { "symlink": false }' \
+            '    }' \
+            '  ],' \
+            '  "require": { "ktav-lang/ktav": "@dev" }' \
+            '}' > composer.json
+          composer install --no-interaction --no-progress
+          echo "CONSUMER=$CONSUMER" >> "$GITHUB_ENV"
+
+      - name: Packaged pure import works; native fails clearly without FFI
+        run: |
+          set -e
+          cd "$CONSUMER"
+          # 1) ffi must be ABSENT, not merely disabled — ffi.enable=0
+          #    is not absence, and NativeLib resolves via
+          #    extension_loaded('ffi') (src/NativeLib.php) before any
+          #    ini check (review3 P2). Fail if the extension is present.
+          #    The pure backend loads and parses through the documented
+          #    public import.
+          php -d ffi.enable=0 -r "if (extension_loaded('ffi')) { fwrite(STDERR, \"ffi present\"); exit(1); } require 'vendor/autoload.php'; \$v = Ktav\\PureBackend::loads('a: 1'); exit(\$v === ['a' => 1] ? 0 : 1);"
+          # 2) the native facade fails CLEARLY without FFI: a
+          #    KtavException whose message names FFI (NativeLib: 'PHP
+          #    FFI extension is required'). Same absence precondition
+          #    before the try/catch.
+          php -d ffi.enable=0 -r "if (extension_loaded('ffi')) { fwrite(STDERR, \"ffi present\"); exit(1); } require 'vendor/autoload.php'; try { Ktav\\Ktav::loads('a: 1'); fwrite(STDERR, 'native backend unexpectedly worked without FFI'); exit(1); } catch (Ktav\\KtavException \$e) { exit(strpos(\$e->getMessage(), 'FFI') === false ? 1 : 0); }"
 
   lint-rust:
     name: rust clippy + fmt

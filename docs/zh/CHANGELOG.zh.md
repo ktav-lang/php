@@ -13,6 +13,24 @@ MINOR 递增即破坏性变更。
 
 ## Unreleased
 
+### 0.8.1
+
+#### 新增
+
+- **纯 PHP 后端** —— 用纯 PHP 实现的 Ktav 0.8.1 完整解析器与写入器，
+  双向皆可，作为 Rust 后端实现的完整替代。通过 `Ktav\PureBackend`
+  在每次调用时显式选择（`loads`、`loadsStrict`、`dumps`、
+  `dumpsForceStrings`、`emitCanonical`、`format`、
+  `canonicalFromSource`、`version()`、`isAvailable()`）；默认的原生
+  `Ktav` 门面保持不变，没有全局后端开关，任何方向都不会静默回退。
+  纯后端只需要 `ext-json` —— 无需 FFI 扩展，也无需下载原生二进制。
+  两条路径产生相同的 `KtavException` 九字段错误信封，带字节偏移区间。
+
+#### 变更
+
+- 核心升级到已发布的 Rust ktav **0.8.1**；规范固定为 0.8.1
+  （规范性语料库 0.8.1），原生资源由其构建。
+
 ## 0.8.0 — 2026-09-24
 
 ### 新增
