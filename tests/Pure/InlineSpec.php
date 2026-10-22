@@ -130,10 +130,40 @@ describe('inline compounds (§ 5.8, pure parser oracles)', function () {
         $fails('[,]', 'MalformedInlineCompound', 'empty inline array item');
     });
 
-    it('rejects a mismatched closing delimiter', function () use ($fails) {
-        // § 6.12 / PureInlineScan mismatch diagnostic at depth 0.
-        $fails('{a: 1]', 'MalformedInlineCompound', 'mismatched closing delimiter');
-        $fails('[a: 1}', 'MalformedInlineCompound', 'mismatched closing delimiter');
+    it('diagnoses a mismatched closer while a value is in progress as UnterminatedInlineCompound', function () use ($fails) {
+        // Corpus invalid/inline/raw_mode_does_not_absorb_mismatched_closer
+        // (`{a:: x]}` → UnterminatedInlineCompound): the `]` ends the raw
+        // scalar and leaves the object unclosed — Rust scan_inline_closer
+        // has no mismatch error, and compound.rs maps a missing matching
+        // closer (None branch, :320) to UnterminatedInlineCompound.
+        // The mechanism is KIND-INDEPENDENT: an inline ARRAY item is a
+        // VALUE state (PureInlineScan maps itemStart → valueScalar for
+        // kind 'a'; keyStart → keyBody only for kind 'o'), so the first
+        // scalar byte of EITHER compound kind enters valueScalar, where
+        // a crossed `}` / `]` terminates the value with closer=null.
+        // `[1, 2}` is the same shape after the comma re-arms itemStart.
+        $fails('{a:: x]}', 'UnterminatedInlineCompound', 'inline compound not closed');
+        $fails('{a: 1]', 'UnterminatedInlineCompound', 'inline compound not closed');
+        $fails('[a: 1}', 'UnterminatedInlineCompound', 'inline compound not closed');
+        $fails('[1, 2}', 'UnterminatedInlineCompound', 'inline compound not closed');
+    });
+
+    // Crossed closer AFTER a closed compound (corpus
+    // invalid/inline/crossed_closer_after_closed_array_no_quote,
+    // MalformedInlineCompound) stays covered by CorpusInvalidSpec —
+    // the pure scan already matches (CI d224334 ✓).
+
+    it('re-arms quoted-key recognition after every dot (spec § 5.3.2/§ 5.3.3)', function () use ($loads) {
+        // spec.md:1221-1231: quoted-segment recognition reapplies after
+        // EACH dot — a quote right after the dot opens an opaque skip
+        // (PureInlineScan dot → keyStart re-arm).
+        expect($loads('{a."b}": 1}'))->toBe(['a' => ['b}' => 1]]);
+    });
+
+    it('terminates a raw value at a comma before a quoted key with a comma (§ 4/§ 5.3.3)', function () use ($loads) {
+        // `::` raw body ends at the first unescaped comma; the quoted
+        // key segment that follows is comma-opaque, so its ',' is data.
+        expect($loads('{v:: x, "k,z": 2}'))->toBe(['v' => 'x', 'k,z' => 2]);
     });
 
     it('rejects content after the closing delimiter', function () use ($fails) {
@@ -141,6 +171,29 @@ describe('inline compounds (§ 5.8, pure parser oracles)', function () {
         // (PureParser::inlineValue / inlineCompoundValue junk check).
         $fails('{a: 1} x', 'MalformedInlineCompound', 'content after the closing delimiter');
         $fails('v: {a: 1} junk', 'MalformedInlineCompound', 'content after the closing delimiter');
+    });
+
+    it('rejects trailing junk after a NESTED compound inside inline compounds', function () use ($fails) {
+        // Corpus invalid/inline/malformed_trailing_content_nested_array
+        // (`{a: [1] junk}` → MalformedInlineCompound, "content after an
+        // already-closed compound"): the kid-tree consumption sites must
+        // verify that only whitespace separates the child's closer from
+        // the segment end (PureParser::inlineTrailingJunk).
+        $fails('{a: [1] junk}', 'MalformedInlineCompound', 'content after the closing delimiter');
+        $fails('[[1] junk, 2]', 'MalformedInlineCompound', 'content after the closing delimiter');
+        // Legal shape: the remainder after the child's closer is empty.
+        expect(PureBackend::loads('{a: [1], b: 2}'))->toBe(['a' => [1], 'b' => 2]);
+    });
+
+    it('treats multibyte whitespace as one whitespace unit (§ 3.3)', function () use ($loads) {
+        // Corpus valid/inline/object/nbsp_before_nested_array (`{a: [1]}`
+        // with NBSP before `[` → {"a": [1]}): every ws-consuming loop
+        // must advance by wsLenAt's returned WIDTH (NBSP is 0xC2 0xA0,
+        // two bytes), never one byte per iteration.
+        expect($loads("{a:\u{00A0}[1]}"))->toBe(['a' => [1]]);
+        // Corpus valid/scalars/whitespace_boundary_value shape: NBSP-
+        // wrapped scalar trims to exactly 'x'.
+        expect($loads("x:\u{00A0}x\u{00A0}"))->toBe(['x' => 'x']);
     });
 
     it('enforces the declared inline depth limit of 128', function () use ($fails) {

@@ -62,19 +62,34 @@ jobs:
           ini-values: ffi.enable=1, xdebug.mode=off
           coverage: xdebug
 
-      # Provenance (review3 #7): Cargo.lock is generated in CI, NOT
-      # committed. Generate it, then pin the published core: the ktav
-      # package entry must be exactly version 0.8.1 with the crates.io
-      # published checksum — a local-path override, an unreleased
+      # Provenance (review3 #7, reworked review4): Cargo.lock is
+      # generated in CI, NOT committed. Generate it, then pin the
+      # published core with a real TOML parse (shell: bash — the matrix
+      # includes windows-latest): the ktav [[package]] entry must be
+      # exactly one, version 0.8.1, from the crates.io registry, with
+      # the published checksum. A local-path override, an unreleased
       # branch or a swapped artifact fails the job here.
       - name: Generate Cargo.lock and verify the published ktav 0.8.1 pin
+        shell: bash
         run: |
           set -e
           cargo generate-lockfile
-          ENTRY=$(grep -A2 '^name = "ktav"$' Cargo.lock)
-          echo "$ENTRY"
-          echo "$ENTRY" | grep -q 'version = "0.8.1"'
-          echo "$ENTRY" | grep -q 'checksum = "7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5"'
+          python3 - <<'PY'
+          import sys, tomllib
+          with open('Cargo.lock', 'rb') as f:
+              data = tomllib.load(f)
+          pkgs = [p for p in data.get('package', []) if p.get('name') == 'ktav']
+          if len(pkgs) != 1:
+              sys.exit('expected exactly one ktav [[package]] entry, found %d' % len(pkgs))
+          p = pkgs[0]
+          if p.get('version') != '0.8.1':
+              sys.exit('ktav version %r != 0.8.1' % p.get('version'))
+          if p.get('source') != 'registry+https://github.com/rust-lang/crates.io-index':
+              sys.exit('ktav source %r is not the crates.io registry' % p.get('source'))
+          if p.get('checksum') != '7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5':
+              sys.exit('ktav checksum %r mismatch' % p.get('checksum'))
+          print('ktav 0.8.1 provenance verified:', p['source'])
+          PY
 
       - name: Build native library
         run: cargo build --release -p ktav-cabi
@@ -126,9 +141,21 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: json, mbstring, xdebug
+          # The colon prefix disables ffi per the setup-php README
+          # (shared extensions are disabled by prefixing with ':'),
+          # even where images bundle it.
+          extensions: json, mbstring, :ffi, xdebug
           ini-values: ffi.enable=0, xdebug.mode=off
           coverage: xdebug
+
+      # The assert step fails the job if ffi still loads: a found-ffi
+      # grep (exit 0) fails; absent ffi (grep exit 1, inside the if
+      # condition, exempt from set -e) passes.
+      - name: Assert the ffi extension is disabled
+        shell: bash
+        run: |
+          set -e
+          if php -m | grep -ix ffi; then echo 'ERROR: ffi extension is still enabled'; exit 1; fi
 
       # composer.json requires only php + ext-json (ext-ffi is a
       # "suggest"), so no platform-req waiver is needed here.
@@ -157,9 +184,20 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.2'
-          extensions: json
+          # The colon prefix disables ffi per the setup-php README
+          # (shared extensions are disabled by prefixing with ':').
+          extensions: json, :ffi
           ini-values: ffi.enable=0
           coverage: none
+
+      # The assert step fails the job if ffi still loads: a found-ffi
+      # grep (exit 0) fails; absent ffi (grep exit 1, inside the if
+      # condition, exempt from set -e) passes.
+      - name: Assert the ffi extension is disabled
+        shell: bash
+        run: |
+          set -e
+          if php -m | grep -ix ffi; then echo 'ERROR: ffi extension is still enabled'; exit 1; fi
 
       - name: Install ktav-lang/ktav into a consumer project (real copy)
         run: |
@@ -187,7 +225,9 @@ jobs:
           # 1) ffi must be ABSENT, not merely disabled — ffi.enable=0
           #    is not absence, and NativeLib resolves via
           #    extension_loaded('ffi') (src/NativeLib.php) before any
-          #    ini check (review3 P2). Fail if the extension is present.
+          #    ini check (review3 P2). The colon-prefixed :ffi in the
+          #    Setup PHP step keeps the extension unloaded; these
+          #    assertions hold the precondition.
           #    The pure backend loads and parses through the documented
           #    public import.
           php -d ffi.enable=0 -r "if (extension_loaded('ffi')) { fwrite(STDERR, \"ffi present\"); exit(1); } require 'vendor/autoload.php'; \$v = Ktav\\PureBackend::loads('a: 1'); exit(\$v === ['a' => 1] ? 0 : 1);"

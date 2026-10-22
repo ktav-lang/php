@@ -354,8 +354,10 @@ final class PureScanner
             }
             if ($b === 0x2E) { // '.' — next segment starts (skipping ws)
                 ++$i;
-                while ($i < $end && self::wsLenAt($s, $i, $end, true) > 0) {
-                    ++$i;
+                while ($i < $end && ($l = self::wsLenAt($s, $i, $end, true)) > 0) {
+                    // Advance by the RETURNED width: multibyte ws
+                    // members are 2–3 bytes, ++ would split them.
+                    $i += $l;
                 }
                 $segStart = true;
                 continue;
@@ -524,11 +526,11 @@ final class PureScanner
     }
 
     /**
-     * § 3.6 integer literal grammar. Returns
-     * [int|PHP_INT_MIN|null-if-overflow, negative] or null when the
-     * body is not an integer literal at all. Domain: i64 — the same
-     * same minimum the corpus assumes; overflow callers fall through
-     * to String per § 5.2 rule 13.
+     * § 3.6 integer literal grammar. Returns [value, negative] where
+     * value is int, PureBigInt (in-i64 magnitude on a host whose int
+     * is narrower than 64 bits — same domain, digit-string carrier),
+     * or null when the body overflows i64 (String per § 5.2 rule 13)
+     * or is not an integer literal at all. Domain: i64.
      *
      * @return array|null
      */
@@ -541,7 +543,10 @@ final class PureScanner
             $neg = $s[$i] === '-';
             ++$i;
         }
-        if ($s[$i] === '0' && ($i + 1 < $n)) {
+        // Prefixes are lowercase-only (0.8.0/0.8.1); the bounds guard
+        // makes '' and sign-only bodies ('+', '-') fall through to the
+        // decRun null path instead of an out-of-range offset read.
+        if ($i < $n && $s[$i] === '0' && ($i + 1 < $n)) {
             // Prefixes are lowercase-only (0.8.0/0.8.1).
             $p = $s[$i + 1];
             if ($p === 'x' || $p === 'o' || $p === 'b') {
@@ -572,11 +577,36 @@ final class PureScanner
         // (int)'9223372036854775808' would saturate before negation.
         if ($neg) {
             if ($c === 0) {
-                return [PHP_INT_MIN, $neg]; // exactly i64::MIN
+                // Exactly i64::MIN — int on a 64-bit host; on a host
+                // whose int is narrower the magnitude is still within
+                // i64 (string-compare proven), so it keeps its Integer
+                // identity via the existing PureBigInt digit-string
+                // carrier (no domain shrink; NOT a new exemption).
+                if (PHP_INT_SIZE === 8) {
+                    return [PHP_INT_MIN, $neg];
+                }
+                return [new PureBigInt('-9223372036854775808'), $neg];
             }
-            return [-(int) $t, $neg]; // |t| < 2^63 — safe
+            // Host-width honesty (§ 5.2 rule 13): the cast is only
+            // trusted when the decimal round-trips; on a host too
+            // narrow for the value the literal becomes a String.
+            // '-0' is Integer 0 (no sign on zero), so skip the check.
+            if ($t !== '0') {
+                $val = -(int) $t;
+                if ((string) $val !== '-' . $t) {
+                    // Host too narrow for the in-i64 magnitude: keep
+                    // the Integer as its exact digit string.
+                    return [new PureBigInt('-' . $t), $neg];
+                }
+                return [$val, $neg];
+            }
+            return [0, $neg];
         }
-        return [(int) $t, $neg];
+        $val = (int) $t;
+        if ((string) $val !== $t) {
+            return [null, $neg]; // host too narrow (§ 5.2 rule 13)
+        }
+        return [$val, $neg];
     }
 
     /** @return array|null [decimalString|null, neg] */
@@ -624,22 +654,38 @@ final class PureScanner
         if ($big) {
             return [null, $neg];
         }
+        // Signed-zero literals normalise to 0 (spec.md:673-675, like
+        // decimal `-0` in matchInteger) — the cast round-trip below
+        // would expect '-0' and misroute the value to String.
+        if ($dec === '0') {
+            return [0, $neg];
+        }
         // Same string-compare discipline as matchInteger: the negative
         // minimum magnitude must never be cast before the range check.
+        // Sign-conditional: a POSITIVE equal-to-max literal is simply
+        // i64::MAX and falls through to the cast round-trip (which on
+        // 64-bit returns PHP_INT_MAX, never PHP_INT_MIN).
         $c = self::digitCmp($dec, $mag);
-        if ($neg) {
-            if ($c === 0) {
+        if ($neg && $c === 0) {
+            // Exactly i64::MIN — int on a 64-bit host, PureBigInt
+            // digit-string carrier on a narrower one (same i64 domain,
+            // no shrink; § 5.2 rule 13 unaffected).
+            if (PHP_INT_SIZE === 8) {
                 return [PHP_INT_MIN, $neg];
             }
-            if ($c > 0) {
-                return [null, $neg];
-            }
-            return [-(int) $dec, $neg];
+            return [new PureBigInt('-9223372036854775808'), $neg];
         }
         if ($c > 0) {
             return [null, $neg];
         }
-        return [(int) $dec, $neg];
+        // Same host-width round-trip discipline as matchInteger: when
+        // the cast cannot hold the in-i64 magnitude (PHP_INT_SIZE < 8)
+        // the Integer keeps its identity as the exact digit string.
+        $val = $neg ? -(int) $dec : (int) $dec;
+        if ((string) $val !== ($neg ? '-' . $dec : $dec)) {
+            return [new PureBigInt($neg ? '-' . $dec : $dec), $neg];
+        }
+        return [$val, $neg];
     }
 
     /**
@@ -789,7 +835,9 @@ final class PureScanner
             $lit .= '.' . str_replace('_', '', $fracPart);
         }
         if ($expText !== '') {
-            $lit .= 'e' . $expText;
+            // Underscores are grammar-valid between exponent digits
+            // (decRun) but not valid in a PHP numeric literal.
+            $lit .= 'e' . str_replace('_', '', $expText);
         }
         $num = (float) ($sign . $lit); // sign preserved
         if (!is_finite($num)) {

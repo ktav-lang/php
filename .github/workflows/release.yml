@@ -75,13 +75,42 @@ jobs:
         with:
           tool: cargo-zigbuild
 
+      # Provenance gate before ANY release build (mirrors ci.yml):
+      # generate Cargo.lock, pin the published ktav 0.8.1 core via a
+      # real TOML parse; the native build below then runs --locked and
+      # the zigbuild build relies on the verified lock. ubuntu-latest
+      # ships python3.
+      - name: Verify the published ktav 0.8.1 core (provenance)
+        shell: bash
+        run: |
+          set -e
+          cargo generate-lockfile
+          python3 - <<'PY'
+          import sys, tomllib
+          with open('Cargo.lock', 'rb') as f:
+              data = tomllib.load(f)
+          pkgs = [p for p in data.get('package', []) if p.get('name') == 'ktav']
+          if len(pkgs) != 1:
+              sys.exit('expected exactly one ktav [[package]] entry, found %d' % len(pkgs))
+          p = pkgs[0]
+          if p.get('version') != '0.8.1':
+              sys.exit('ktav version %r != 0.8.1' % p.get('version'))
+          if p.get('source') != 'registry+https://github.com/rust-lang/crates.io-index':
+              sys.exit('ktav source %r is not the crates.io registry' % p.get('source'))
+          if p.get('checksum') != '7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5':
+              sys.exit('ktav checksum %r mismatch' % p.get('checksum'))
+          print('ktav 0.8.1 provenance verified:', p['source'])
+          PY
+
+      # The lock was verified and pinned above; zigbuild has no --locked
+      # flag, so it relies on the just-generated, verified Cargo.lock.
       - name: Build (zigbuild)
         if: matrix.settings.use-zigbuild
         run: cargo zigbuild --release -p ktav-cabi --target ${{ matrix.settings.target }}.2.17
 
       - name: Build (native)
         if: ${{ !matrix.settings.use-zigbuild }}
-        run: cargo build --release -p ktav-cabi --target ${{ matrix.settings.target }}
+        run: cargo build --release -p ktav-cabi --target ${{ matrix.settings.target }} --locked
 
       - name: Rename artifact
         shell: bash

@@ -312,7 +312,9 @@ final class PureParser
         if ($top['t'] !== $kind) {
             $this->fail('UnbalancedBracket', $ts, $te, ['found' => $kind === 'o' ? '}' : ']']);
         }
-        if ($top['root'] && !$this->rootExplicit) {
+        // 'root' is absent on valuePart/mls-pushed frames (§ 5.2 nested
+        // compounds) — those are never unclosed-root candidates.
+        if ((isset($top['root']) ? $top['root'] : false) && !$this->rootExplicit) {
             // An implicit root has no opening line to match.
             $this->fail('UnbalancedBracket', $ts, $te, ['found' => $kind === 'o' ? '}' : ']']);
         }
@@ -382,10 +384,12 @@ final class PureParser
         }
         $segs = $this->walkKey($frame['v'], $ts, $sep);
         $dest = ['walk' => $segs];
-        // Value part: <sep-end> consumes the maximal ws run.
+        // Value part: <sep-end> consumes the maximal ws run, advancing
+        // by the RETURNED wsLenAt width (multibyte members are 2–3
+        // bytes; ++ would split a NBSP into content).
         $vs = $after;
-        while ($vs < $te && PureScanner::wsLenAt($src, $vs, $te, true) > 0) {
-            ++$vs;
+        while ($vs < $te && ($l = PureScanner::wsLenAt($src, $vs, $te, true)) > 0) {
+            $vs += $l;
         }
         if ($marker === 2) {
             // Raw marker: literal String, no type inference, NO escape
@@ -420,6 +424,10 @@ final class PureParser
         $decoded = [];
         $cur = $table;
         foreach ($rawSegs as $i => $rawSeg) {
+            // One tick per decoded descent segment: O(segments) is the
+            // correct-work bound (PHP's hash lookup itself is trusted
+            // and unmeterable — see PerfRegressionSpec header).
+            PureWorkMeter::tick();
             list($ss, $se) = PureScanner::trimBounds($rawSeg, 0, strlen($rawSeg));
             if ($ss >= $se) {
                 $this->fail('EmptyKey', $ps, $pe);
@@ -555,8 +563,9 @@ final class PureParser
             if ($after < $te && PureScanner::wsLenAt($src, $after, $te, true) === 0) {
                 $this->fail('MissingSeparatorSpace', $ts, $ts + 3);
             }
-            while ($after < $te && PureScanner::wsLenAt($src, $after, $te, true) > 0) {
-                ++$after;
+            while ($after < $te && ($l = PureScanner::wsLenAt($src, $after, $te, true)) > 0) {
+                // Width-correct: see pairLine (multibyte ws members).
+                $after += $l;
             }
             // Trailing § 3.3 whitespace before EOL is trimmed from the
             // semantic body (§ 5.4 rule 1).
@@ -656,7 +665,10 @@ final class PureParser
             $indent = count($this->frames) - 1;
             if ($this->events !== null) {
                 $buf = &$this->curBuf();
-                $isFirst = $parent['root'] && $this->rootKind === 'a'
+                // A valuePart-pushed parent has no 'root' key; its first
+                // item is never the implicit root Array's first item.
+                $isFirst = (isset($parent['root']) ? $parent['root'] : false)
+                    && $this->rootKind === 'a'
                     && $parent['v'] instanceof PureList && $parent['v']->items === [];
                 $buf[] = ['item', $value, $indent, $isFirst, $kids];
             }
@@ -684,6 +696,7 @@ final class PureParser
      */
     private function insertLeaf(array $walk, $value)
     {
+        PureWorkMeter::tick(); // O(1) leaf placement in a correct implementation
         $cur = $walk['table'];
         $seg = $walk['leaf'];
         if (array_key_exists($seg, $cur->pairs)) {
@@ -752,6 +765,11 @@ final class PureParser
                     $kid['segs'],
                     $kid['kids']
                 );
+                // Kid-tree consumption carries the no-rescan contract:
+                // bytes between the child's closer and the item end
+                // must be whitespace only (§ 6.12 / corpus fixture
+                // malformed_trailing_content_nested_array).
+                $this->inlineTrailingJunk($kid['closer'] + 1, $se);
                 continue;
             }
             $list->items[] = $this->inlineValue($ss, $se, $depth);
@@ -775,8 +793,9 @@ final class PureParser
         }
         $segs = $this->walkKey($obj, $ss, $sep);
         $vs = $sep + $marker;
-        while ($vs < $se && PureScanner::wsLenAt($src, $vs, $se, true) > 0) {
-            ++$vs;
+        while ($vs < $se && ($l = PureScanner::wsLenAt($src, $vs, $se, true)) > 0) {
+            // Width-correct: see pairLine (multibyte ws members).
+            $vs += $l;
         }
         if ($marker === 2) {
             // § 5.8.2 raw marker: escapes ARE processed here, leading
@@ -798,10 +817,31 @@ final class PureParser
                 $kid['segs'],
                 $kid['kids']
             );
+            // Same no-rescan contract as the array branch: only ws may
+            // follow the child's closer within this pair's segment.
+            $this->inlineTrailingJunk($kid['closer'] + 1, $se);
         } else {
             $value = $this->inlineValue($vs, $se, $depth);
         }
         $this->insertLeaf($segs, $value);
+    }
+
+    /**
+     * After a nested inline compound's closer, only § 3.3 whitespace
+     * may remain within the consuming segment — anything else is
+     * trailing content (§ 6.12; corpus fixture
+     * invalid/inline/malformed_trailing_content_nested_array). The
+     * scanner does not check this (kid-tree contract), so both kid
+     * consumption sites call it.
+     *
+     * @return void
+     */
+    private function inlineTrailingJunk(int $after, int $se)
+    {
+        list($ts, $te) = PureScanner::trimBounds($this->src, $after, $se);
+        if ($ts < $te) {
+            $this->fail('MalformedInlineCompound', $after, $se, ['detail' => 'content after the closing delimiter']);
+        }
     }
 
     /**
@@ -816,8 +856,9 @@ final class PureParser
     {
         $src = $this->src;
         $i = $start;
-        while ($i < $end && PureScanner::wsLenAt($src, $i, $end, true) > 0) {
-            ++$i;
+        while ($i < $end && ($l = PureScanner::wsLenAt($src, $i, $end, true)) > 0) {
+            // Width-correct: see pairLine (multibyte ws members).
+            $i += $l;
         }
         if ($i >= $end) {
             return ''; // empty object-pair value (§ 5.8.2)
@@ -915,9 +956,17 @@ final class PureParser
         }
         $int = PureScanner::matchInteger($body);
         if ($int !== null) {
-            if ($int[0] !== null) {
-                $this->checkLossy($body, (int) $int[0], $bs, $be);
-                return (int) $int[0];
+            $iv = $int[0];
+            if ($iv instanceof PureBigInt) {
+                // In-i64 magnitude on a host too narrow for the cast:
+                // Integer identity via the digit-string carrier. A
+                // bigint's canonical form IS its digits — never lossy.
+                $this->checkLossy($body, $iv->digits, $bs, $be);
+                return $iv;
+            }
+            if ($iv !== null) {
+                $this->checkLossy($body, (int) $iv, $bs, $be);
+                return (int) $iv;
             }
             return $body; // i64 overflow → String (§ 5.2 rule 13)
         }

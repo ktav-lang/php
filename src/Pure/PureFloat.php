@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ktav\Pure;
 
+use Ktav\KtavException;
+
 /**
  * § 5.9.8 canonical Float rendering and the § 5.9.0 reason-code
  * Display strings (split out of PureWriter to keep each file under
@@ -33,8 +35,52 @@ final class PureFloat
     }
 
     /**
+     * Shortest round-trip decimal digits for $v, independent of the
+     * serialize_precision ini (forced to -1 and restored in a
+     * finally). Checked contract: if the ini could not be forced
+     * (ini_set disabled or locked) AND the ambient precision truncates
+     * the digits, there is no spec-conforming answer — throw
+     * KtavException instead of silently emitting wrong canonical
+     * bytes. The ini is never left modified.
+     *
+     * @return string
+     */
+    public static function shortestDigits(float $v): string
+    {
+        $prev = ini_get('serialize_precision');
+        $canSet = function_exists('ini_set');
+        if ($canSet) {
+            // @: some hosts disable ini_set with a warning; on PHP 8
+            // a disabled function raises \Error, caught below.
+            $set = @ini_set('serialize_precision', '-1');
+            $canSet = $set !== false;
+        }
+        $s = false;
+        try {
+            $s = json_encode($v);
+        } catch (\Error $e) {
+            $canSet = false;
+        } finally {
+            if ($canSet) {
+                ini_set('serialize_precision', (string) $prev);
+            }
+        }
+        $s = is_string($s) ? $s : '';
+        // Round-trip proof: the digits MUST cast back to exactly $v
+        // (json digits like '1e-7' cast-compare exactly; NaN/Inf never
+        // reach here — formatFloatText guards is_finite upstream).
+        if ($s === '' || (float) $s !== $v) {
+            throw new KtavException(
+                'cannot produce shortest round-trip Float digits for canonical output:'
+                . ' serialize_precision is not settable and the ambient precision is lossy'
+            );
+        }
+        return $s;
+    }
+
+    /**
      * Canonical Float text (§ 5.9.8): shortest round-trip digits
-     * (json_encode / serialize_precision -1 — a Ryu-equivalent),
+     * (configuration-independent shortestDigits — a Ryu-equivalent),
      * re-laid-out by the exact 1e-2 / 1e7 thresholds. `-0.0` keeps
      * its sign; scientific form has no `+` and no exponent zeroes.
      *
@@ -59,7 +105,7 @@ final class PureFloat
             $hi = unpack('V', substr(pack('e', $v), 4, 4))[1];
             return (($hi >> 31) === 1) ? '-0.0' : '0.0';
         }
-        $s = (string) json_encode($v);
+        $s = self::shortestDigits($v);
         $neg = $s[0] === '-';
         if ($neg) {
             $s = substr($s, 1);

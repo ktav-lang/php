@@ -463,7 +463,7 @@ final class PureWriter
         if ($this->canonical) {
             return PureFloat::formatFloatText($value);
         }
-        $s = (string) json_encode($value);
+        $s = PureFloat::shortestDigits($value); // ini-independent (§ 5.9.8)
         if (strpos($s, '.') === false && strpos($s, 'e') === false && strpos($s, 'E') === false) {
             $s .= '.0';
         }

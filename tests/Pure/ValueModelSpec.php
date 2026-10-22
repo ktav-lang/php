@@ -55,6 +55,26 @@ describe('PureBackend value model', function () {
         expect($got['x'])->toBe(0);
     });
 
+    it('parses based i64::MAX as PHP_INT_MAX on a 64-bit host', function () {
+        // Corpus i64-max fixtures + spec.md:659-665 (Integer domain is
+        // i64): a POSITIVE equal-to-max based literal falls through the
+        // sign-conditional bound (PureScanner::matchBased) to the cast
+        // round-trip — never PHP_INT_MIN.
+        if (PHP_INT_SIZE < 8) {
+            return; // 32-bit host: PHP_INT_MAX < i64::MAX (PureBigInt carrier)
+        }
+        expect(PureBackend::loads('m: 0x7fffffffffffffff')['m'])->toBe(PHP_INT_MAX);
+    });
+
+    it('normalises negative based zero to Integer 0', function () {
+        // spec.md:673-675: signed-zero literals (decimal AND based)
+        // normalise to 0 — `-0x0` must not be misrouted to String by a
+        // '-0' round-trip expectation.
+        expect(PureBackend::loads('z: -0x0')['z'])->toBe(0);
+        expect(PureBackend::loads('z: -0b0')['z'])->toBe(0);
+        expect(PureBackend::loads('z: -0o0')['z'])->toBe(0);
+    });
+
     // -- Floats --------------------------------------------------------
 
     it('round-trips floats through shortest digits', function () {

@@ -69,13 +69,25 @@ final class PureInlineScan
                 }
                 continue;
             }
+            if ($b === 0x2E && $frames[$t]['kind'] === 'o'
+                && $frames[$t]['state'] === 'keyBody') { // '.' in a key
+                // § 5.3.2 positional rule: the dot starts a NEW key
+                // segment, so per-segment quoted-key recognition is
+                // re-armed (a quote right after the dot re-opens the
+                // opaque skip; structural bytes are per-segment).
+                $frames[$t]['state'] = 'keyStart';
+                ++$i;
+                continue;
+            }
             if ($frames[$t]['state'] === 'keyStart' && PureScanner::isQuoteByte($b)) {
                 // Quoted key segment: opaque through its closer.
                 ++$i;
                 $closed = false;
                 while ($i < $end) {
+                    PureWorkMeter::tick(); // per byte skipped in the opaque scan
                     $c = ord($src[$i]);
                     if ($c === 0x5C) {
+                        PureWorkMeter::tick(); // the escaped byte of the += 2 jump
                         $i += 2;
                         continue;
                     }
@@ -115,18 +127,20 @@ final class PureInlineScan
                     // pair value). Keys are never compounds.
                     $ck = $b === 0x7B ? 'o' : 'a';
                     $frames[$t]['state'] = 'valueCompound';
-                    $frames[$t]['pendingKid'] = [
-                        'segIdx' => count($frames[$t]['segs']),
-                        'valueStart' => $i,
-                        'kind' => $ck,
-                    ];
+                    // Attachment metadata lives on the CHILD frame (the
+                    // popped frame reads its OWN pendingKid), so leaf
+                    // children and grandchildren chain naturally.
                     $frames[] = [
                         'kind' => $ck,
                         'state' => $ck === 'o' ? 'keyStart' : 'itemStart',
                         'segStart' => $i + 1,
                         'segs' => [],
                         'kids' => [],
-                        'pendingKid' => null,
+                        'pendingKid' => [
+                            'segIdx' => count($frames[$t]['segs']),
+                            'valueStart' => $i,
+                            'kind' => $ck,
+                        ],
                     ];
                     ++$i;
                     continue;
@@ -139,6 +153,17 @@ final class PureInlineScan
             if ($b === 0x7D || $b === 0x5D) { // '}' ']'
                 $want = $b === 0x7D ? 'o' : 'a';
                 if ($frames[$t]['kind'] !== $want) {
+                    // Crossed closer. Rust scan_inline_closer never raises
+                    // a mismatch: while a scalar / raw VALUE is in progress
+                    // the closer just ends the line short of a matching
+                    // close (compound.rs None → UnterminatedInlineCompound;
+                    // corpus raw_mode_does_not_absorb_mismatched_closer).
+                    // At value-complete / key positions the diagnostic
+                    // below stays MalformedInlineCompound.
+                    $st = $frames[$t]['state'];
+                    if ($st === 'valueRaw' || $st === 'valueScalar') {
+                        return ['closer' => null, 'mismatch' => false, 'badEscape' => null, 'segs' => [], 'kids' => []];
+                    }
                     return ['closer' => null, 'mismatch' => true, 'badEscape' => null, 'segs' => [], 'kids' => []];
                 }
                 $f = $frames[$t];
@@ -177,11 +202,23 @@ final class PureInlineScan
             $st = $frames[$t]['state'];
             if (($st === 'keyStart' || $st === 'itemStart' || $st === 'valueStart')
                 && PureScanner::wsLenAt($src, $i, $end, true) === 0) {
-                $frames[$t]['state'] = $st === 'valueStart' ? 'valueScalar' : 'keyBody';
+                if ($st === 'valueStart') {
+                    $frames[$t]['state'] = 'valueScalar';
+                } elseif ($st === 'itemStart' && $frames[$t]['kind'] === 'a') {
+                    // An inline ARRAY item is a VALUE, not a key:
+                    // subsequent brackets are literal scalar data and a
+                    // crossed closer mid-value terminates (corpus
+                    // raw_mode_does_not_absorb_mismatched_closer; the
+                    // valueRaw/valueScalar rule below applies to BOTH
+                    // compound kinds → UnterminatedInlineCompound).
+                    $frames[$t]['state'] = 'valueScalar';
+                } else {
+                    $frames[$t]['state'] = 'keyBody';
+                }
             }
             // 'valueRaw' / 'valueScalar' / 'valueCompound' never leave
             // their state here.
-            ++$i;
+            $i += max(1, PureScanner::wsLenAt($src, $i, $end, true));
         }
         return ['closer' => null, 'mismatch' => false, 'badEscape' => null, 'segs' => [], 'kids' => []];
     }
