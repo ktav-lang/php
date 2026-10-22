@@ -23,9 +23,17 @@ describe('cross-backend round trips (native <-> pure)', function () {
     });
 
     // -----------------------------------------------------------------
-    // Synthetic value set: broad shapes, no empty compounds (PHP value
-    // model loses {} vs [] identity on the loads side of any round
-    // trip — documented limitation, see CorpusValidSpec).
+    // Synthetic value set: broad shapes. Empty LIST compounds are now
+    // included ('empty list'): since the round-6 empty-array identity
+    // fix (PureWriter::toInternal — a nested empty PHP array is a
+    // PureList, mirroring the native wire layer where json_encode keeps
+    // nested empty arrays as JSON `[]`, WireJson.php:118-123), both
+    // backends agree on the empty-list value AND its canonical bytes
+    // `tags: []` (corpus: tests/valid/arrays/empty_inline.*). Empty
+    // OBJECT compounds remain excluded: the public PHP value model
+    // still cannot carry `{}` vs `[]` identity through loads() (a
+    // parsed empty object comes back as PHP []), so a {} entry would
+    // not round-trip as a distinct value — documented limitation.
     // -----------------------------------------------------------------
     $values = [
         'flat object' => ['b' => 2, 'a' => 1, 'c' => true, 'd' => null],
@@ -37,13 +45,25 @@ describe('cross-backend round trips (native <-> pure)', function () {
         'list root' => ['alpha', 42, 0.5, false, null, 'end'],
         'list of objects' => [['name' => 'a', 'n' => 1], ['name' => 'b', 'n' => 2]],
         'object of lists' => ['tags' => ['prod', 'eu-west-1'], 'ports' => [80, 443]],
+        // Empty LIST: pure toInternal → PureList (`tags: []`), native
+        // wire json_encode → `{"tags":[]}` (WireJson.php:118-123);
+        // both parse back to ['tags' => []] and both backends emit the
+        // identical canonical bytes (corpus arrays/empty_inline).
+        'empty list' => ['tags' => []],
         'deep nesting' => ['l1' => ['l2' => ['l3' => ['l4' => ['leaf' => 'x']]]]],
         'dotted-merged' => Corpus::call('pure', 'loads', "a.b: 1\nc: 2\na.d: 3\n"),
         'negative + floats' => ['z' => -17, 'f' => 0.75, 'tiny' => 1e-3, 'big' => 1e10],
         'quoted keys' => ['cache:redis' => 'enabled', 'say "hi": now' => 'ok', 'a.b' => 'not dotted'],
         'unicode' => ["ключ" => 'значение', 'emoji' => "🚀", 'esc' => "hello!"],
         'multiline string' => Corpus::call('pure', 'loads', "script: (\n    line1\n    line2\n)\n"),
-        'raw marker' => Corpus::call('pure', 'loads', "ver::007\n"),
+        // § 5.3 <sep-end>: the raw marker `::` requires whitespace or
+        // EOL after it — the glued form `ver::007` is itself a
+        // MissingSeparatorSpace error (§ 6.10; corpus invalid fixture
+        // missing_separator_space/raw_marker_glued_colon.ktav = `key:::value`),
+        // so this group-loading loads() call must use the spec-valid
+        // SPACED form. Same value either way: raw marker = literal
+        // String '007'.
+        'raw marker' => Corpus::call('pure', 'loads', "ver:: 007\n"),
     ];
 
     // Expected PARSE output per entry. Defaults to the same value that

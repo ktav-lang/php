@@ -425,8 +425,11 @@ final class PureParser
         $cur = $table;
         foreach ($rawSegs as $i => $rawSeg) {
             // One tick per decoded descent segment: O(segments) is the
-            // correct-work bound (PHP's hash lookup itself is trusted
-            // and unmeterable — see PerfRegressionSpec header).
+            // correct-work bound. The pair lookup below is a PHP hash
+            // lookup — trusted and unmeterable — so an uninstrumented
+            // rescan of the table would not be caught; the tick bound
+            // guards extra per-segment passes (see PerfRegressionSpec
+            // HONEST SCOPE).
             PureWorkMeter::tick();
             list($ss, $se) = PureScanner::trimBounds($rawSeg, 0, strlen($rawSeg));
             if ($ss >= $se) {
@@ -871,6 +874,20 @@ final class PureParser
         // stopped at the unescaped , } ]), trimmed, escapes processed.
         list($bs, $be) = PureScanner::trimBounds($src, $i, $end);
         $raw = substr($src, $bs, $be - $bs);
+        // § 5.6 / § 5.6.1 fully-empty and verbatim-empty multiline
+        // String forms inside an inline compound: the body `()` is the
+        // stripped multiline String with zero content lines and `(())`
+        // its verbatim counterpart — both are the EMPTY String, not a
+        // two/four-byte literal (corpus triple tests/valid/inline/
+        // paren_empty_string_matches_raw_body.*: `a: ()` / `b: (())` /
+        // `c: [()]` → "" / "" / [""], while the ESCAPED body
+        // `\u0028\u0029` stays the literal "()" and takes the raw
+        // marker on emission per § 5.9.6). The line-level dispatcher
+        // (valuePart) already handles these two bodies before
+        // classification; this is the inline counterpart.
+        if ($raw === '()' || $raw === '(())') {
+            return '';
+        }
         $dec = $this->decodeInlineScalar($raw, $bs);
         return $this->classifyScalar($dec[0], $dec[1], $bs, $be);
     }
@@ -961,7 +978,7 @@ final class PureParser
                 // In-i64 magnitude on a host too narrow for the cast:
                 // Integer identity via the digit-string carrier. A
                 // bigint's canonical form IS its digits — never lossy.
-                $this->checkLossy($body, $iv->digits, $bs, $be);
+                $this->checkLossy($body, $iv, $bs, $be);
                 return $iv;
             }
             if ($iv !== null) {

@@ -227,7 +227,9 @@ describe('Ktav (smoke)', function () {
         }
 
         expect($output)->toContain('service=web port=8080');
-        expect($output)->toContain('ktav_cabi version: 0.8.0');
+        // Native 0.8.1 producer (src/NativeLib.php LIB_VERSION '0.8.1';
+        // CI run 39718006238: the example now reports 0.8.1).
+        expect($output)->toContain('ktav_cabi version: 0.8.1');
     });
 
 });

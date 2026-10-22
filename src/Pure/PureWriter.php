@@ -62,10 +62,23 @@ final class PureWriter
      * Integer (int, or PureBigInt beyond PHP_INT_MAX — no float
      * conversion), `['$f' => text]` → float.
      *
+     * Empty PHP array identity: PHP cannot distinguish `[]` (empty
+     * list) from `{}` (empty object), so a NESTED empty array follows
+     * the EMPTY LIST convention (PureList) — the same distinction
+     * json_encode makes on the native wire layer (WireJson::wrap keeps
+     * nested empty arrays as JSON `[]`), and the same convention the
+     * corpus pins (tests/valid/arrays/empty_inline.canonical.ktav:
+     * `tags: []` / `items: []`; arrays/nested third item `[]`). Only
+     * the ROOT call ($isRoot, from renderDocument) keeps the documented
+     * empty-Object convention so `dumps([]) === ''` and
+     * `emitCanonical([]) === ''` (§ 5.9.0 empty Object root; pinned by
+     * ValueModelSpec against rust render.rs emit_root).
+     *
      * @param mixed $v
+     * @param bool $isRoot true only for the renderDocument root call
      * @return mixed
      */
-    public static function toInternal($v)
+    public static function toInternal($v, bool $isRoot = false)
     {
         if ($v instanceof PureObject || $v instanceof PureList) {
             return $v;
@@ -82,7 +95,9 @@ final class PureWriter
             }
         }
         if ($v === []) {
-            return new PureObject(); // documented: empty PHP array = {}
+            // Root call: documented empty PHP array = {} (§ 5.9.0).
+            // Nested: empty list convention — see the docblock above.
+            return $isRoot ? new PureObject() : new PureList();
         }
         if (self::isList($v)) {
             $out = new PureList();
@@ -136,7 +151,7 @@ final class PureWriter
      */
     public static function renderDocument($root, bool $canonical, bool $force): string
     {
-        $root = self::toInternal($root);
+        $root = self::toInternal($root, true);
         if (!($root instanceof PureObject) && !($root instanceof PureList)) {
             PureKtav::failEnvelope([
                 'error' => 'Unrepresentable',

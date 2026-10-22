@@ -91,9 +91,17 @@ describe('structured error envelope (issue rust#12)', function () {
         expect($thrown)->toBeAnInstanceOf(KtavException::class);
         expect($thrown->getError())->toBe('InvalidUtf8');
         expect($thrown->getReason())->toBeNull();
-        expect($thrown->getErrorLine())->toBeNull();
+        // Since ktav 0.8.1: the cabi envelope derives `line` from the
+        // first-invalid-byte offset when Error::line() is None
+        // (rust/src/cabi/envelope.rs — env.line =
+        // line_of_offset(src, valid_up_to)); offset 0 is line 1.
+        expect($thrown->getErrorLine())->toBe(1);
         expect($thrown->getSpecSection())->toBe('§6.15');
-        expect($thrown->getMessage())->toBe('InvalidUtf8: input is not valid UTF-8');
+        // Since ktav 0.8.1: the core's Display rendering names the
+        // first invalid byte offset (rust/src/error/error/display.rs:
+        // Error::InvalidUtf8 => "... at byte offset {valid_up_to}").
+        expect($thrown->getMessage())
+            ->toBe('InvalidUtf8: input is not valid UTF-8; first invalid byte sequence at byte offset 0');
     });
 
     it('PHP-side scalar root rejection carries its spec reason', function () {

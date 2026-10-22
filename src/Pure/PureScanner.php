@@ -604,7 +604,12 @@ final class PureScanner
         }
         $val = (int) $t;
         if ((string) $val !== $t) {
-            return [null, $neg]; // host too narrow (§ 5.2 rule 13)
+            // Host too narrow for the in-i64 magnitude (PHP_INT_SIZE<8):
+            // keep the Integer as its exact digit string, mirroring
+            // matchBased. Same i64 domain — NOT a domain shrink and NOT
+            // a new exemption (§ 5.2 rule 13 still routes >i64
+            // magnitudes to String via the $c > 0 branch above).
+            return [new PureBigInt($t), $neg];
         }
         return [$val, $neg];
     }

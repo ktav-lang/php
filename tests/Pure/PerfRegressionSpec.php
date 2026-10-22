@@ -22,22 +22,23 @@ use Ktav\PureBackend;
  *     opaque quoted-key skip loop;
  *   - PureScanner::decRun(): 1 tick per digit-run byte;
  *   - PureParser::walkKey(): 1 tick per decoded dotted-segment descent
- *     step (O(segments) in a correct implementation — guards against a
- *     per-pair linear rescan of the accumulated table);
+ *     step (O(segments) in a correct implementation);
  *   - PureParser::insertLeaf(): 1 tick per call (O(1) leaf placement);
  *   - PureWriter::emitPair() / emitItem(): 1 tick per emitted
  *     pair/item line.
  *
- * HONEST SCOPE (round-4/round-5 review P2): the meter is NOT a
+ * HONEST SCOPE (round-4/round-6 review): the meter is NOT a
  * universal complexity proof. NOT counted: PHP's own hash-table
  * lookup cost (unmeterable and trusted), key-escape work, output-byte
  * appends, dotted-path descent inside the writer, and formatter
- * trivia recursion. The 2.5x doubling bound therefore guards
- * the INSTRUMENTED hot paths only — in particular OUR per-segment
- * descent / leaf-insertion work, where a per-pair linear rescan of
- * the accumulated table would inflate ticks superlinearly (the
- * duplicate-heavy-merge workload); correctness-at-scale assertions
- * (deep-equal reparse, leaf walks, merge counts) guard the rest.
+ * trivia recursion. Consequently an UNINSTRUMENTED linear rescan of
+ * the accumulated table (e.g. a quadratic lookup inside walkKey or
+ * insertLeaf) would NOT be caught by the tick bound — the pair
+ * lookups are plain PHP hash lookups. What the 2.5x doubling bound
+ * DOES catch is extra INSTRUMENTED passes: extra per-segment descent
+ * steps, extra per-byte/per-line scans, or extra emitted lines per
+ * input line. Correctness-at-scale assertions (deep-equal reparse,
+ * leaf walks, merge counts) guard the rest.
  *
  * The tick bound applies ONLY where the instrumented sites dominate
  * AND both the input AND the spec-mandated output are linear in the
@@ -232,14 +233,16 @@ describe('pure backend scaling (deterministic PureWorkMeter tick bound)', functi
     });
 
     it('duplicate-heavy merge: per-segment descent + leaf insert stay linear', function () use ($scale) {
-        // Narrow meter guard (round-5 review P2): the metered sites are
-        // OUR walkKey per-segment descent steps and insertLeaf calls
-        // (O(segments)/O(1) in a correct implementation). A per-pair
-        // linear rescan of the accumulated merge table inside either
-        // would inflate ticks(2N) superlinearly and break the 2.5x
-        // bound. PHP's internal hash-lookup cost is unmeterable and
-        // trusted (see the HONEST SCOPE header). N stays small
-        // (200 vs 400 pairs) — a deterministic counter, not a CI load.
+        // Narrow meter guard (round-6 honest scope): the metered sites
+        // are OUR walkKey per-segment descent steps and insertLeaf
+        // calls (O(segments)/O(1) in a correct implementation). The
+        // pair lookups are PHP hash lookups — unmeterable — so an
+        // uninstrumented linear rescan of the accumulated merge table
+        // would NOT be caught here; what the 2.5x bound catches is
+        // extra per-segment descent steps, extra line scans, or extra
+        // emitted lines per input line (see the HONEST SCOPE header).
+        // N stays small (200 vs 400 pairs) — a deterministic counter,
+        // not a CI load.
         $run = function (int $n): array {
             $lines = [];
             for ($i = 0; $i < $n; $i++) {

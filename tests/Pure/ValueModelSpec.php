@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ktav\Tests\Pure;
 
 use Ktav\KtavException;
+use Ktav\Pure\PureScanner;
 use Ktav\PureBackend;
 
 /**
@@ -64,6 +65,36 @@ describe('PureBackend value model', function () {
             return; // 32-bit host: PHP_INT_MAX < i64::MAX (PureBigInt carrier)
         }
         expect(PureBackend::loads('m: 0x7fffffffffffffff')['m'])->toBe(PHP_INT_MAX);
+    });
+
+    it('keeps in-i64 decimal magnitudes exact on any host width', function () {
+        // matchInteger positive tail: i64 overflow stays String (§ 5.2
+        // rule 13, unchanged on every host); an in-i64 magnitude the
+        // host cast cannot hold (PHP_INT_SIZE < 8) keeps its Integer
+        // identity as a PureBigInt digit-string carrier — mirroring
+        // matchBased.
+        $over = PureScanner::matchInteger('9223372036854775808');
+        expect($over[0])->toBeNull();
+        expect($over[1])->toBe(false);
+        if (PHP_INT_SIZE >= 8) {
+            $val = PureScanner::matchInteger('4000000000');
+            expect($val[0])->toBe(4000000000);
+            expect($val[1])->toBe(false);
+        } else {
+            $car = PureScanner::matchInteger('4000000000');
+            expect($car[0])->toBeAnInstanceOf('Ktav\Pure\PureBigInt');
+            expect($car[0]->digits)->toBe('4000000000');
+            expect($car[1])->toBe(false);
+        }
+    });
+
+    it('pins the 64-bit int representation for in-i64 decimal scalars', function () {
+        // Public representation contract: on a 64-bit host the decimal
+        // carrier path must not regress the plain-int result.
+        if (PHP_INT_SIZE < 8) {
+            return; // narrow host: carrier is PureBigInt (tested above)
+        }
+        expect(PureBackend::loads('v: 4000000000')['v'])->toBe(4000000000);
     });
 
     it('normalises negative based zero to Integer 0', function () {
@@ -130,15 +161,20 @@ describe('PureBackend value model', function () {
         expect(PureBackend::emitCanonical([]))->toBe('');
         expect(PureBackend::loads('{}'))->toBe([]);
         // `[[]]` is NOT an empty Array root: toInternal converts the
-        // inner empty PHP array to a PureObject (PureWriter.php:84-86,
-        // documented {} convention), so the root is a LIST whose one
-        // item is an EMPTY COMPOUND. emitRoot takes the § 5.9.3 wrap
-        // branch (items[0] is a compound, PureWriter.php:172-178):
+        // OUTER array to a PureList root (renderDocument calls
+        // toInternal with $isRoot=true), while the INNER empty PHP
+        // array follows the nested EMPTY-LIST convention
+        // (PureWriter::toInternal, $isRoot=false) — the same identity
+        // json_encode preserves for nested empty arrays on the native
+        // wire layer (WireJson.php:118-123). Corpus grounding:
+        // tests/valid/arrays/nested.canonical.ktav, whose third item
+        // is exactly this shape — the bare `[]` line. So emitRoot
+        // takes the § 5.9.3 wrap branch (items[0] is a compound):
         // "[\n" + emitItem(item, 1, false) + "]\n"; emitItem's empty
-        // PureObject branch (PureWriter.php:405-407) indents one level
-        // and emits "{}\n" — bytes "[\n    {}\n]\n", which reparses
-        // to [ [] ]-shaped (one empty compound item).
-        expect(PureBackend::emitCanonical([[]]))->toBe("[\n    {}\n]\n");
+        // PureList branch indents one level and emits "[]\n" — bytes
+        // "[\n    []\n]\n", which reparses to [ [] ] (one empty-list
+        // item).
+        expect(PureBackend::emitCanonical([[]]))->toBe("[\n    []\n]\n");
         expect(PureBackend::loads(PureBackend::emitCanonical([[]])))->toBe([[]]);
     });
 

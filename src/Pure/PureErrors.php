@@ -42,7 +42,16 @@ trait PureErrors
         if (!$this->strict) {
             return;
         }
-        $canonical = is_int($value) ? (string) $value : PureFloat::formatFloatText($value);
+        // Canonical text by value type: an int stringifies, a
+        // PureBigInt's canonical form IS its digit string, only a
+        // float goes through the float formatter.
+        if (is_int($value)) {
+            $canonical = (string) $value;
+        } elseif ($value instanceof PureBigInt) {
+            $canonical = $value->digits;
+        } else {
+            $canonical = PureFloat::formatFloatText($value);
+        }
         if ($canonical === $body) {
             return;
         }
