@@ -37,8 +37,77 @@ jobs:
       - name: Generated docs are byte-identical to their source units
         run: node scripts/build-docs.mjs --check
 
+  cycle-diagnostic:
+    name: cycle diagnostics (Ubuntu / PHP 8.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: ffi, json, mbstring, xdebug
+          ini-values: ffi.enable=1, xdebug.mode=off
+          coverage: xdebug
+      - name: Build native library
+        run: cargo build --release -p ktav-cabi
+      - name: Composer install
+        run: composer install --prefer-dist --no-progress
+      - name: Ordinary bounded children
+        id: ordinary
+        shell: bash
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/cycle-diagnostic"
+          result=0
+          for backend in pure native; do
+            echo "ORDINARY-BEGIN backend=$backend"
+            set -o pipefail
+            timeout --kill-after=5s 30s php -d memory_limit=128M -d max_execution_time=20 tests/ValueCycleChild.php "$backend" 2>&1 | tee "$RUNNER_TEMP/cycle-diagnostic/ordinary-$backend.log"
+            status=${PIPESTATUS[0]}
+            echo "ORDINARY-EXIT backend=$backend status=$status"
+            if [ "$status" -ne 0 ]; then result=1; fi
+          done
+          exit "$result"
+      - name: Focused Kahlan instrumentation comparison
+        if: success() || steps.ordinary.outcome == 'failure'
+        shell: bash
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/cycle-diagnostic"
+          result=0
+          for backend in pure native; do
+            echo "INSTRUMENTED backend=$backend"
+            KTAV_CYCLE_BACKEND="$backend" KTAV_ENABLED_BACKENDS="$backend" KTAV_LIB_PATH="$KTAV_LIB_PATH" timeout --kill-after=5s 20s php -d memory_limit=128M -d max_execution_time=15 vendor/bin/kahlan --spec=scripts/ci/CycleInstrumentationSpec.php --reporter=verbose >"$RUNNER_TEMP/cycle-diagnostic/instrumented-$backend.log" 2>&1
+            status=$?
+            cat "$RUNNER_TEMP/cycle-diagnostic/instrumented-$backend.log"
+            echo "INSTRUMENTED-EXIT backend=$backend status=$status"
+            if [ "$status" -ne 0 ]; then result=1; fi
+          done
+          exit "$result"
+      - name: Upload cycle diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cycle-diagnostic-logs
+          path: |
+            ${{ runner.temp }}/cycle-diagnostic/
+            vendor/composer/installed.json
+            vendor/kahlan/kahlan/src/Jit/Patcher/
+            vendor/kahlan/kahlan/src/Plugin/Pointcut.php
+            vendor/kahlan/kahlan/src/Plugin/Call/
+          if-no-files-found: warn
+
   test:
     name: ${{ matrix.os }} / PHP ${{ matrix.php }}
+    needs: cycle-diagnostic
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -128,6 +197,7 @@ jobs:
   # missing corpus FAILS this job, it never skips.
   test-pure:
     name: 'pure (no Rust/native artifact) ${{ matrix.os }} / PHP ${{ matrix.php }}'
+    needs: cycle-diagnostic
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
