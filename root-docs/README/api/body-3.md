@@ -11,9 +11,9 @@ separator, `\.` for a literal dot and `\\` for a literal backslash;
 segments are already-decoded literal names. Errors are distinct
 envelope codes: `EditInvalidPath` (body = UTF-8 byte offset in the
 path), `EditNotFound` (missing key, out-of-bounds index, scalar
-descent, empty path) and `EditUnsupported` (noncontiguous
+descent, empty segments list) and `EditUnsupported` (noncontiguous
 dotted/reopen targets, structural replacement of a comment-carrying
-container, a replacement String containing CR or a line `))`). A
+container, or a replacement without a lossless representation in its target context). A
 source that does not parse raises the ordinary parser envelope. On the
 native side these methods require a `ktav_cabi` exporting the
 source-edit ABI (version 2); an older binary fails with a clear
@@ -45,9 +45,9 @@ stay ordered.
 literal обратного слеша; сегменты — уже декодированные literal имена.
 Ошибки — отдельные коды конверта: `EditInvalidPath` (body = UTF-8
 смещение в пути), `EditNotFound` (нет ключа, индекс вне диапазона,
-спуск через скаляр, пустой путь) и `EditUnsupported`
-(неконтiguous dotted/reopen-цели, структурная замена контейнера с
-комментариями, строка замены с CR или строкой `))`). Исходник с
+спуск через скаляр, пустой список сегментов) и `EditUnsupported`
+(несмежные цели из dotted/reopened-определений, структурная замена контейнера с
+комментариями или замена без lossless-представления в контексте цели). Исходник с
 ошибкой разбора даёт обычный конверт парсера. На нативной стороне эти
 методы требуют `ktav_cabi` с ABI правки исходника (версия 2); старый
 бинарник отклоняется с понятной ошибкой версии и никогда не
@@ -77,8 +77,8 @@ no-op 结果也与源码逐字节相同。文本路径 `key1.key2.0.key4` 以 `.
 分隔符，`\.` 表示字面点号，`\\` 表示字面反斜杠；segments 是已解码的
 字面名称。错误是不同的信封代码：`EditInvalidPath`（body = 路径中的
 UTF-8 字节偏移）、`EditNotFound`（键缺失、索引越界、穿过标量、空
-路径）和 `EditUnsupported`（dotted/reopen 的非连续目标、对含注释
-容器的结构性替换、包含 CR 或行 `))` 的替换字符串）。源码解析失败会
+路径段列表）和 `EditUnsupported`（dotted/reopen 的非连续目标、对含注释
+容器的结构性替换、或无法在目标上下文中无损表示的替换值）。源码解析失败会
 抛出普通的解析器信封。原生侧这些方法需要导出源码编辑 ABI（版本 2）
 的 `ktav_cabi`；旧二进制会以明确的版本错误被拒绝，绝不会静默退化为
 纯 PHP 后备。空 PHP 数组作为替换值遵循嵌套空 LIST 约定；空的 `stdClass` 表示显式的空
