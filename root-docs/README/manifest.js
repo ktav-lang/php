@@ -2,6 +2,7 @@ export default [
   "title",
   "install",
   "quick-start",
+  "source-edit-status",
   "api",
   "formatting",
   "errors",

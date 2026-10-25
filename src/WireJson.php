@@ -48,6 +48,31 @@ final class WireJson
     }
 
     /**
+     * EDIT-ONLY wire encoding: identical to {@see encode} except that
+     * an EMPTY `stdClass` is accepted as an explicit empty Object
+     * (`{}` on the wire) — a PHP `[]` cannot express it and the edit
+     * contract's emptying_block fixture needs the Object identity.
+     * dumps/writer semantics are NOT extended: wrap() in dumps mode
+     * keeps rejecting stdClass, and a NON-empty stdClass (including a
+     * self-referencing one) is a typed Message transport failure here
+     * too — never a recursion and never a coerced scalar.
+     *
+     * @param mixed $value
+     * @throws KtavException Message envelope on a non-empty stdClass
+     */
+    public static function encodeEditReplacement($value): string
+    {
+        if (is_array($value)) {
+            ArrayGraph::assertAcyclic($value);
+        }
+        $wrapped = self::wrap($value, true);
+        return json_encode(
+            $wrapped,
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+        );
+    }
+
+    /**
      * @param mixed $v
      * @return mixed
      */
@@ -90,9 +115,10 @@ final class WireJson
 
     /**
      * @param mixed $v
+     * @param bool $editObjects edit-only empty-stdClass Object support
      * @return mixed
      */
-    private static function wrap($v)
+    private static function wrap($v, bool $editObjects = false)
     {
         if ($v === null || is_bool($v) || is_string($v)) {
             return $v;
@@ -123,9 +149,28 @@ final class WireJson
         if (is_array($v)) {
             $out = [];
             foreach ($v as $k => $child) {
-                $out[$k] = self::wrap($child);
+                $out[$k] = self::wrap($child, $editObjects);
             }
             return $out;
+        }
+        if ($editObjects && $v instanceof \stdClass) {
+            // Empty stdClass only; non-empty is a Message, never recursion.
+            if ((array) $v !== []) {
+                throw KtavException::fromEnvelope([
+                    'error' => 'Message',
+                    'reason' => null,
+                    'line' => null,
+                    'line_text' => null,
+                    'span' => null,
+                    'path' => null,
+                    'canonical' => null,
+                    'spec_section' => null,
+                    'body' => null,
+                    'message' => 'edit replacement transport: only an EMPTY stdClass'
+                        . ' (an explicit empty Object) is supported',
+                ]);
+            }
+            return $v; // json_encode(new stdClass) === '{}'
         }
         throw new KtavException('unsupported value type for Ktav::dumps: ' . gettype($v));
     }

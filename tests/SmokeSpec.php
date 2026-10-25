@@ -227,9 +227,11 @@ describe('Ktav (smoke)', function () {
         }
 
         expect($output)->toContain('service=web port=8080');
-        // Native 0.8.1 producer (src/NativeLib.php LIB_VERSION '0.8.1';
-        // CI run 39718006238: the example now reports 0.8.1).
-        expect($output)->toContain('ktav_cabi version: 0.8.1');
+        // The example prints the LOADED cabi's own version string. With
+        // the immutable git-core pin (447a00b) the exact number is no
+        // longer statically known — compatibility is enforced by the
+        // ABI-2 gate at load time, so only the FORMAT is pinned here.
+        expect($output)->toMatch('/ktav_cabi version: \d+\.\d+\.\d+/');
     });
 
 });

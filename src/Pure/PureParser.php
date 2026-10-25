@@ -79,12 +79,16 @@ final class PureParser
         // over continuation bytes / to EOF, like the Rust core).
         $bad = PureScanner::validateUtf8($src);
         if ($bad !== null) {
-            list($line, $lineText) = PureScanner::locate($src, $bad[0]);
+            list($line, ) = PureScanner::locate($src, $bad[0]);
+            // § 6.15 (0.9): the line NUMBER travels, but line_text stays
+            // NULL — the source is not valid UTF-8, so a "line text"
+            // slice would decode replacement chars over bytes that are
+            // not characters.
             PureKtav::failEnvelope([
                 'error' => 'InvalidUtf8',
                 'spec_section' => '§6.15',
                 'line' => $line,
-                'line_text' => $lineText,
+                'line_text' => null,
                 'span' => ['start' => $bad[0], 'end' => $bad[1]],
                 'body' => 'input is not valid UTF-8: invalid utf-8 sequence of '
                     . max(1, $bad[1] - $bad[0]) . ' byte(s) from index ' . $bad[0],

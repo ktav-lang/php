@@ -80,7 +80,10 @@ if ($backend === 'native') {
     $lib = getenv('KTAV_LIB_PATH');
     if ($lib === false || $lib === '' || !is_file($lib)) { fwrite(STDERR, "KTAV_LIB_PATH must name an existing native artifact\n"); exit(2); }
     \Ktav\NativeLoader::setLibraryPath($lib);
-    if (Ktav::nativeVersion() !== '0.8.1') { throw new RuntimeException('nativeVersion is not 0.8.1'); }
+    // Version STRING is informational since the git-core pin; the
+    // ABI-2 gate inside any native call is the real compatibility
+    // check — a successful call below proves the gate passed.
+    if (Ktav::nativeVersion() === '') { throw new RuntimeException('nativeVersion is empty'); }
 }
 $factories = ['assocCycle', 'listCycle', 'mutualCycle', 'nestedRootCycle']; $operations = ['dumps', 'emitCanonical', 'dumpsForceStrings'];
 foreach ($factories as $factory) foreach ($operations as $operation) {

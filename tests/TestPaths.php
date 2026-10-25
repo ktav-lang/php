@@ -51,6 +51,22 @@ final class TestPaths
         return self::REPO . '/spec/versions/0.8/tests';
     }
 
+    /**
+     * Spec 0.9 corpus root (diagnostics09: 30 EOF + 42 malformed-UTF8
+     * new invalid fixtures; total 412 = 228 valid / 162 invalid /
+     * 5 unrepresentable / 4 parseable-unrepresentable / 13 strict-lossy).
+     * Parent pins the spec submodule to a45275688557dc9ecc24a82afb491dd46e615d4d.
+     * `KTAV_SPEC09_DIR` overrides (CI / parent checkouts).
+     */
+    public static function spec09(): string
+    {
+        $override = getenv('KTAV_SPEC09_DIR');
+        if ($override !== false && $override !== '') {
+            return rtrim($override, '/\\');
+        }
+        return self::REPO . '/spec/versions/0.9/tests';
+    }
+
     public static function cabiBuilt(): bool
     {
         return is_file(self::cabi());
