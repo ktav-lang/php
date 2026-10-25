@@ -181,7 +181,9 @@ describe('pure source edit (spec 0.9 semantics)', function () {
         $e = $fails(function () use ($edit) {
             $edit("a: {}\na.y: 2\n", 'a', ['z' => 9]);
         }, 'EditUnsupported');
-        expect(strpos((string) $e->getBody(), 'noncontiguous') !== false)->toBe(true);
+        // body = the core reason phrase, verbatim.
+        expect($e->getBody())->toBe('target is a noncontiguous value (dotted-key/reopen intermediate);'
+            . ' no lossless single-range splice exists');
         // The editable leaf still works.
         expect($edit("a: {}\na.y: 2\n", 'a.y', 7))->toBe("a: {}\na.y: 7\n");
     });
@@ -314,15 +316,20 @@ describe('pure source edit (spec 0.9 semantics)', function () {
         expect($edit("a: 1\n", 'a', true))->toBe("a: true\n");
     });
 
-    it('carries arbitrary integers losslessly via the tagged wire', function () use ($edit) {
-        expect($edit("a: 1\n", 'a', ['$i' => '123456789012345678901234567890']))
-            ->toBe("a: 123456789012345678901234567890\n");
+    it('refuses a tagged >i64 Integer: the spliced body re-parses as a String', function () use ($edit, $fails) {
+        // An arbitrary-precision $i payload is written digit-exactly,
+        // but § 5.2 rule 13 re-classifies an >i64 literal as a String —
+        // the verification target (String) can never equal the typed
+        // Integer replacement, so core refuses (fail closed).
+        $fails(function () use ($edit) {
+            $edit("a: 1\n", 'a', ['$i' => '123456789012345678901234567890']);
+        }, 'EditUnsupported');
     });
 
     it('replaces a whole inline container inline when it fits', function () use ($edit) {
         // A PHP [] follows the nested empty-LIST convention (documented
         // like the writer's); an Object identity needs nonempty pairs.
-        expect($edit("k: {a: 1}\n", 'k', [7]))->toBe("k: {[7]}\n");
+        expect($edit("k: {a: 1}\n", 'k', [7]))->toBe("k: [7]\n");
         expect($edit("k: {a: 1}\n", 'k', []))->toBe("k: []\n");
     });
 
@@ -330,13 +337,39 @@ describe('pure source edit (spec 0.9 semantics)', function () {
         expect($edit("k: {\n  x: 1\n}\n", 'k', []))->toBe("k: [\n]\n");
     });
 
+    it('empty stdClass is the explicit empty Object; non-empty fails closed', function () use ($edit, $fails) {
+        // Core emptying_block_containers: the empty OBJECT identity.
+        expect($edit("a: {\n  x: 1\n}\n", 'a', new \stdClass()))->toBe("a: {\n}\n");
+        // Nested empty Object inside an array.
+        expect($edit("a: [old]\n", 'a', [new \stdClass()]))->toBe("a: [{}]\n");
+        // Non-empty — INCLUDING a self-referencing one — is a Message
+        // before any recursion (these calls return, never hang).
+        $nonEmpty = new \stdClass();
+        $nonEmpty->q = 1;
+        $fails(function () use ($edit, $nonEmpty) {
+            $edit("a: 1\n", 'a', $nonEmpty);
+        }, 'Message');
+        $selfRef = new \stdClass();
+        $selfRef->self = $selfRef;
+        $fails(function () use ($edit, $selfRef) {
+            $edit("a: 1\n", 'a', $selfRef);
+        }, 'Message');
+    });
+
     it('renders a non-empty compound replacement as a 4-space block', function () use ($edit) {
         expect($edit("k: {\n  x: 1\n}\n", 'k', ['y' => 2]))->toBe("k: {\n    y: 2\n}\n");
     });
 
     it('does not reformat ancestors on a type change', function () use ($edit) {
+        // Scalar -> compound in a block pair renders the compound body
+        // like the core's render_compound_item(level 1) + reindent:
+        // children at target indent + 4, closer at the target indent.
         expect($edit("k: {\n  x: 1\n  y: two\n}\n", 'k.x', ['q' => 1]))
-            ->toBe("k: {\n  x: {q: 1}\n  y: two\n}\n");
+            ->toBe("k: {\n  x: {\n      q: 1\n  }\n  y: two\n}\n");
+        // A type change never touches SIBLING bytes (core
+        // type_change_does_not_force_unrelated_layout_changes).
+        expect($edit("a: {x: [1], keep: [2]}\n", 'a.x', true))->toBe("a: {x: true, keep: [2]}\n");
+        expect($edit("a: [1]\n", 'a', '42'))->toBe("a:: 42\n");
     });
 
     it('replaces a multiline block string with a verbatim block', function () use ($edit) {

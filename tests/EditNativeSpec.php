@@ -89,10 +89,13 @@ describe('native source edit (C ABI parity, ABI version 2)', function () {
 
     it('reports the same envelope codes and bodies as pure', function () use ($requireNativeEdit) {
         $requireNativeEdit();
+        // The core noncontiguous reason, byte-exact on BOTH backends.
+        $noncontiguous = 'target is a noncontiguous value (dotted-key/reopen intermediate);'
+            . ' no lossless single-range splice exists';
         $cases = [
             ['a: 1' . "\n", 'a.', 2, 'EditInvalidPath', '2'],
             ['a: 1' . "\n", 'b', 2, 'EditNotFound', null],
-            ["a: {}\na.y: 2\n", 'a', ['z' => 9], 'EditUnsupported', 'noncontiguous'],
+            ["a: {}\na.y: 2\n", 'a', ['z' => 9], 'EditUnsupported', $noncontiguous],
         ];
         foreach ($cases as $case) {
             list($src, $path, $repl, $code, $body) = $case;
@@ -112,15 +115,14 @@ describe('native source edit (C ABI parity, ABI version 2)', function () {
             expect($pure)->toBeAnInstanceOf(KtavException::class);
             expect($native->getError())->toBe($code);
             expect($native->getError())->toBe($pure->getError());
+            // Body parity is EXACT, never a substring relaxation.
             expect($native->getBody())->toBe($body);
+            expect($pure->getBody())->toBe($body);
             if ($code !== 'EditUnsupported') {
-                // Pure reason text may differ in wording for Unsupported;
-                // codes and null-locations must match everywhere.
+                // Codes and null-locations must match everywhere.
                 expect($native->getErrorLine())->toBe($pure->getErrorLine());
                 expect($native->getSpan())->toBe($pure->getSpan());
             }
-            // The host error text IS the envelope message.
-            expect($native->getMessage())->toBe((string) $native->getMessage());
         }
     });
 
@@ -273,6 +275,47 @@ describe('native source edit (C ABI parity, ABI version 2)', function () {
         $reordered = "k: {a: [2, 1]}\n";
         expect(Ktav::editValue("k: {a: [1, 2]}\n", 'k.a', [2, 1]))->toBe($reordered);
         expect(PureBackend::editValue("k: {a: [1, 2]}\n", 'k.a', [2, 1]))->toBe($reordered);
+    });
+
+    it('supports an explicit EMPTY stdClass Object replacement on both backends', function () use ($requireNativeEdit) {
+        $requireNativeEdit();
+        // Core emptying_block_containers fixture: an EMPTY stdClass is
+        // the explicit empty Object ([] stays the empty LIST). Both
+        // backends, both entry shapes.
+        expect(Ktav::editValue("a: {\n  x: 1\n}\n", 'a', new \stdClass()))
+            ->toBe("a: {\n}\n");
+        expect(PureBackend::editValue("a: {\n  x: 1\n}\n", 'a', new \stdClass()))
+            ->toBe("a: {\n}\n");
+        // Nested empty Object inside an array (domain-supported).
+        expect(Ktav::editValue("a: [old]\n", 'a', [new \stdClass()]))
+            ->toBe("a: [{}]\n");
+        expect(PureBackend::editValue("a: [old]\n", 'a', [new \stdClass()]))
+            ->toBe("a: [{}]\n");
+        // Non-empty stdClass: typed Message on BOTH backends, fail
+        // closed — and a SELF-REFERENCING one must fail without
+        // recursion (these calls return, never hang).
+        $nonEmpty = new \stdClass();
+        $nonEmpty->q = 1;
+        $selfRef = new \stdClass();
+        $selfRef->self = $selfRef;
+        foreach ([$nonEmpty, $selfRef] as $bad) {
+            $native = null;
+            $pure = null;
+            try {
+                Ktav::editValue("a: 1\n", 'a', $bad);
+            } catch (KtavException $e) {
+                $native = $e;
+            }
+            try {
+                PureBackend::editValue("a: 1\n", 'a', $bad);
+            } catch (KtavException $e) {
+                $pure = $e;
+            }
+            expect($native)->toBeAnInstanceOf(KtavException::class);
+            expect($native->getError())->toBe('Message');
+            expect($pure)->toBeAnInstanceOf(KtavException::class);
+            expect($pure->getError())->toBe('Message');
+        }
     });
 
     it('segments variant carries literal keys without unescaping', function () use ($requireNativeEdit) {

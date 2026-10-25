@@ -19,7 +19,9 @@ native side these methods require a `ktav_cabi` exporting the
 source-edit ABI (version 2); an older binary fails with a clear
 version error and is never replaced by a hidden pure fallback. A PHP
 empty array as the replacement follows the nested empty-LIST
-convention; typed payloads (`['$i' => …]`, `['$f' => …]`) go through
+convention; an EMPTY `stdClass` is the explicit empty Object (`[]`
+cannot express it), a NON-empty `stdClass` is a `Message` transport
+failure; typed payloads (`['$i' => …]`, `['$f' => …]`) go through
 the same strict wire ingest as the native codec — `$i` is canonicalized
 (explicit `+` stripped, redundant leading zeros trimmed, signed zero
 normalized to `0`, bignums digit-exact), `$f` must be a decimal lexical
@@ -50,7 +52,9 @@ literal обратного слеша; сегменты — уже декоди�
 методы требуют `ktav_cabi` с ABI правки исходника (версия 2); старый
 бинарник отклоняется с понятной ошибкой версии и никогда не
 подменяется скрытым pure-fallback. Пустой PHP-массив в качестве
-замены следует соглашению вложенного пустого LIST; типизированные
+замены следует соглашению вложенного пустого LIST; ПУСТОЙ `stdClass` —
+это явный пустой Object (`[]` его не выражает), НЕпустой `stdClass` —
+транспортный сбой `Message`; типизированные
 полезные нагрузки (`['$i' => …]`, `['$f' => …]`) проходят тот же
 строгий wire-ingest, что и нативный кодек — `$i` канонизируется
 (явный `+` снимается, лишние ведущие нули срезаются, знаковый нуль
@@ -77,7 +81,8 @@ UTF-8 字节偏移）、`EditNotFound`（键缺失、索引越界、穿过标量
 容器的结构性替换、包含 CR 或行 `))` 的替换字符串）。源码解析失败会
 抛出普通的解析器信封。原生侧这些方法需要导出源码编辑 ABI（版本 2）
 的 `ktav_cabi`；旧二进制会以明确的版本错误被拒绝，绝不会静默退化为
-纯 PHP 后备。空 PHP 数组作为替换值遵循嵌套空 LIST 约定；类型化载荷
+纯 PHP 后备。空 PHP 数组作为替换值遵循嵌套空 LIST 约定；空的 `stdClass` 表示显式的空
+Object（`[]` 无法表达），非空 `stdClass` 是 `Message` 传输失败；类型化载荷
 （`['$i' => …]`、`['$f' => …]`）经过与原生编解码器相同的严格 wire-ingest
 —— `$i` 会规范化（去掉显式 `+`、裁剪多余的先导零、带符号零归一化为
 `0`、大数按位精确），`$f` 必须是十进制词法形式并按最短往返形式重新

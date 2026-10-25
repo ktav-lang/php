@@ -173,7 +173,7 @@ final class Ktav
             'ktav_edit_value',
             $source,
             $path,
-            WireJson::encode($replacement)
+            WireJson::encodeEditReplacement($replacement)
         );
     }
 
@@ -212,7 +212,7 @@ final class Ktav
             'ktav_edit_value_segments',
             $source,
             $pathJson,
-            WireJson::encode($replacement)
+            WireJson::encodeEditReplacement($replacement)
         );
     }
 

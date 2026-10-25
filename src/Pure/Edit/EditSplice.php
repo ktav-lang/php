@@ -232,6 +232,20 @@ final class EditSplice
         if (is_string($v)) {
             return ['t' => 'string', 'v' => $v];
         }
+        // EMPTY stdClass only: the documented escape hatch for a
+        // replacement empty Object (PHP [] is the empty LIST). A
+        // NON-empty stdClass — including a self-referencing one — is a
+        // typed Message transport failure BEFORE any recursion, so a
+        // cycle can never hang the conversion.
+        if ($v instanceof \stdClass) {
+            if ((array) $v !== []) {
+                throw EditEnvelope::message(
+                    'edit replacement transport: only an EMPTY stdClass'
+                    . ' (an explicit empty Object) is supported'
+                );
+            }
+            return ['t' => 'object', 'pairs' => []];
+        }
         if (is_array($v)) {
             if ($v === [] || EditSplice::isList($v)) {
                 $items = [];
@@ -1453,18 +1467,37 @@ final class EditSplice
         return null;
     }
 
-    /** Trimmed (BOM-stripped) whole-line owner for inline contexts. */
-    private static function lineOwner(string $source, int $pos): array
+    /** Trimmed owner for inline contexts: the whole trimmed line when
+     * it is itself a compound, otherwise the value body after the
+     * pair's unescaped colon (core inline_owner final branch). */
+    private static function lineOwner(string $source, int $pos): ?array
     {
         $line = EditTree::physicalLine($source, $pos);
         $start = strpos($source, $line, max(0, $pos - strlen($line)));
         list($ts, $te) = PureScanner::trimBounds($line, 0, strlen($line));
         $body = substr($line, $ts, $te - $ts);
+        $bodyStart = $start + $ts;
         if (substr($body, 0, 3) === "\xEF\xBB\xBF") {
             $body = substr($body, 3);
-            $ts += 3;
+            $bodyStart += 3;
         }
-        return [$start + $ts, $start + $ts + strlen($body)];
+        if (self::isCompoundText($body)) {
+            return [$bodyStart, $bodyStart + strlen($body)];
+        }
+        // Unescaped colon on the line: the pair value is the owner.
+        list($sep, $marker, $unterm) = PureScanner::findSeparator($line, $ts, $te);
+        if ($sep < 0 || $unterm) {
+            return null;
+        }
+        $vs = $sep + $marker;
+        while ($vs < $te && ($l = PureScanner::wsLenAt($line, $vs, $te, true)) > 0) {
+            $vs += $l;
+        }
+        $value = substr($line, $vs, $te - $vs);
+        if (!self::isCompoundText($value)) {
+            return null;
+        }
+        return [$start + $vs, $start + $vs + strlen($value)];
     }
 
     /**

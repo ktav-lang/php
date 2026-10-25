@@ -164,7 +164,9 @@ native side these methods require a `ktav_cabi` exporting the
 source-edit ABI (version 2); an older binary fails with a clear
 version error and is never replaced by a hidden pure fallback. A PHP
 empty array as the replacement follows the nested empty-LIST
-convention; typed payloads (`['$i' => …]`, `['$f' => …]`) go through
+convention; an EMPTY `stdClass` is the explicit empty Object (`[]`
+cannot express it), a NON-empty `stdClass` is a `Message` transport
+failure; typed payloads (`['$i' => …]`, `['$f' => …]`) go through
 the same strict wire ingest as the native codec — `$i` is canonicalized
 (explicit `+` stripped, redundant leading zeros trimmed, signed zero
 normalized to `0`, bignums digit-exact), `$f` must be a decimal lexical
