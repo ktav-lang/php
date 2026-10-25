@@ -113,33 +113,46 @@ jobs:
           ini-values: ffi.enable=1, xdebug.mode=off
           coverage: xdebug
 
-      # Provenance (review3 #7, reworked review4): Cargo.lock is
-      # generated in CI, NOT committed. Generate it, then pin the
-      # published core with a real TOML parse (shell: bash — the matrix
-      # includes windows-latest): the ktav [[package]] entry must be
-      # exactly one, version 0.8.1, from the crates.io registry, with
-      # the published checksum. A local-path override, an unreleased
-      # branch or a swapped artifact fails the job here.
-      - name: Generate Cargo.lock and verify the published ktav 0.8.1 pin
+      # Provenance (release guards NOT weakened — the target moved):
+      # Cargo.lock is generated in CI, NOT committed. The ktav core is
+      # the IMMUTABLE GIT PIN chosen by the user for the 0.9
+      # source-edit ABI (rev 447a00bd012e8d3f347c7e1eb59c3f0d9a78332f);
+      # the TOML parse must show exactly one ktav [[package]] whose
+      # source is that exact git rev — a registry swap, a local-path
+      # override, a moved rev or a different branch fails the job here.
+      - name: Generate Cargo.lock and verify the immutable ktav git-core pin (447a00b, ABI 2)
         shell: bash
         run: |
           set -e
           cargo generate-lockfile
           python3 - <<'PY'
           import sys, tomllib
+          REV = '447a00bd012e8d3f347c7e1eb59c3f0d9a78332f'
           with open('Cargo.lock', 'rb') as f:
               data = tomllib.load(f)
           pkgs = [p for p in data.get('package', []) if p.get('name') == 'ktav']
           if len(pkgs) != 1:
               sys.exit('expected exactly one ktav [[package]] entry, found %d' % len(pkgs))
           p = pkgs[0]
-          if p.get('version') != '0.8.1':
-              sys.exit('ktav version %r != 0.8.1' % p.get('version'))
-          if p.get('source') != 'registry+https://github.com/rust-lang/crates.io-index':
-              sys.exit('ktav source %r is not the crates.io registry' % p.get('source'))
-          if p.get('checksum') != '7140dfe2fa6c320e74768cd6a637828c2d26f81746254f4fcd805f3993bd3fd5':
-              sys.exit('ktav checksum %r mismatch' % p.get('checksum'))
-          print('ktav 0.8.1 provenance verified:', p['source'])
+          src = p.get('source', '')
+          if src != 'git+https://github.com/ktav-lang/rust?rev=' + REV + '#' + REV or p.get('version') != '0.9.0':
+              sys.exit('ktav source %r is not the ktav-lang/rust git pin' % src)
+          if REV not in src:
+              sys.exit('ktav git source %r does not pin the immutable rev %s' % (src, REV))
+          if 'registry+' in src or 'path+' in src:
+              sys.exit('ktav source %r is a registry or local-path dependency' % src)
+          print('ktav immutable git-core pin verified:', src)
+          PY
+          # ABI gate: the pinned core must export the ABI-2 set before
+          # any PHP native cell runs.
+          python3 - <<'PY'
+          import sys, tomllib
+          with open('Cargo.toml', 'rb') as f:
+              ws = tomllib.load(f)
+          ktav = ws['workspace']['dependencies']['ktav']
+          if ktav.get('git') != 'https://github.com/ktav-lang/rust' or ktav.get('rev') != '447a00bd012e8d3f347c7e1eb59c3f0d9a78332f':
+              sys.exit('workspace ktav dependency is not the immutable 447a00b pin: %r' % (ktav,))
+          print('workspace ktav dependency pinned:', ktav['rev'])
           PY
 
       - name: Build native library
@@ -410,8 +423,8 @@ jobs:
           KTAV_LIB_PATH: ${{ github.workspace }}/target/debug/libktav_cabi.so
         run: vendor/bin/kahlan --spec=tests/NativeDebugEmptySpec.php --reporter=verbose
 
-      - name: Assert the loaded native reports 0.8.1
+      - name: Assert the loaded native serves calls through the ABI-2 gate
         env:
           KTAV_LIB_PATH: ${{ github.workspace }}/target/debug/libktav_cabi.so
         run: |
-          php -r "require 'vendor/autoload.php'; exit(\\Ktav\\Ktav::nativeVersion() === '0.8.1' ? 0 : 1);"
+          php -r "require 'vendor/autoload.php'; if (\Ktav\Ktav::nativeVersion() === '') { exit(1); } if (\Ktav\NativeLib::EXPECTED_ABI_VERSION !== 2) { exit(1); } exit(0);"

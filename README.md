@@ -92,6 +92,8 @@ $text = Ktav::dumps($doc);
 
 A complete runnable example lives in [`examples/basic.php`](examples/basic.php).
 
+> **Unreleased (0.9 preparation):** These editing APIs and updated diagnostics are not included in published 0.8.1 packages. Native backends require the pinned 0.9 core (C ABI 2 for C-FFI); pure backends remain standalone.
+
 ## API
 
 | Method | Purpose |
@@ -141,6 +143,37 @@ Documented differences:
   `canonicalFromSource` when that identity must survive.
 - Pure mode needs enabled standard `ext-json`, but no third-party
   runtime Composer packages, FFI or native binary.
+
+Source editing (spec 0.9). `editValue($source, $path, $replacement)`
+and `editValueSegments($source, $segments, $replacement)` replace an
+EXISTING value in the source text and return the new text; the input
+is never mutated. Only the bytes of the target (and of inline wrappers
+the layout rules force to expand) change: comments, key spelling and
+order, dotted/inline/block forms, BOM, CR/LF/CRLF and the final-EOL
+state survive; a no-op is byte-identical even for noncanonical
+spelling. The textual path `key1.key2.0.key4` uses `.` as the
+separator, `\.` for a literal dot and `\\` for a literal backslash;
+segments are already-decoded literal names. Errors are distinct
+envelope codes: `EditInvalidPath` (body = UTF-8 byte offset in the
+path), `EditNotFound` (missing key, out-of-bounds index, scalar
+descent, empty path) and `EditUnsupported` (noncontiguous
+dotted/reopen targets, structural replacement of a comment-carrying
+container, a replacement String containing CR or a line `))`). A
+source that does not parse raises the ordinary parser envelope. On the
+native side these methods require a `ktav_cabi` exporting the
+source-edit ABI (version 2); an older binary fails with a clear
+version error and is never replaced by a hidden pure fallback. A PHP
+empty array as the replacement follows the nested empty-LIST
+convention; typed payloads (`['$i' => …]`, `['$f' => …]`) go through
+the same strict wire ingest as the native codec — `$i` is canonicalized
+(explicit `+` stripped, redundant leading zeros trimmed, signed zero
+normalized to `0`, bignums digit-exact), `$f` must be a decimal lexical
+form re-emitted shortest round-trip, and any invalid payload is a
+`Message` transport failure, never a coerced scalar. Integer identity
+is exact digit-string equality and Float identity is exact f64 equality
+(the sign of zero is preserved, never a `precision`-ini string cast);
+Object equality IGNORES key order (Rust IndexMap PartialEq), arrays
+stay ordered.
 
 ### Formatting
 

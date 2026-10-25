@@ -58,6 +58,7 @@ final class NativeLib
 
         void ktav_free(uint8_t *ptr, size_t len);
         const char *ktav_version();
+        int ktav_abi_version();
         C;
 
     private static ?\FFI $ffi = null;
@@ -82,19 +83,167 @@ final class NativeLib
                 $e,
             );
         }
-        // Provenance check: an override (KTAV_LIB_PATH / setLibraryPath)
-        // or a stale cache entry may carry an OLD binary; a LIB_VERSION
-        // bump alone would not reject it. Verify the loaded library
-        // reports the expected version before it serves any call.
-        $actual = self::versionFromFfi();
-        if ($actual !== self::LIB_VERSION) {
-            self::$ffi = null;
+        // Provenance: a stale override / cache entry may carry an OLD
+        // binary. Since the immutable git-core pin (447a00b) the
+        // version STRING is no longer statically knowable, so the
+        // AUTHORITATIVE load gate is the C ABI version: an ABI-1 (or
+        // any non-2) binary is rejected for EVERY native operation.
+        // The exact 447a00b rev is provenance-checked in CI against
+        // Cargo.lock instead of here.
+        self::assertAbiVersion((int) self::$ffi->ktav_abi_version(), $path);
+        return self::$ffi;
+    }
+
+    /**
+     * Shared ABI gate: since the user-approved ABI 1 -> 2 bump, EVERY
+     * native call (original nine AND source edit) is served only by a
+     * binary reporting ktav_abi_version() == 2; an ABI-1 binary is
+     * rejected at load time with a clear version error — never a
+     * silent pure fallback. Static so the rejection mechanism itself
+     * is testable without an ABI-1 artifact on disk.
+     */
+    public static function assertAbiVersion(int $actual, string $path = 'ktav_cabi'): void
+    {
+        if ($actual !== self::EXPECTED_ABI_VERSION) {
             throw new KtavException(
-                'ktav native library version mismatch in ' . $path
-                . ': expected ' . self::LIB_VERSION . ', got ' . $actual
+                'ktav_cabi ABI version mismatch in ' . $path
+                . ': expected ' . self::EXPECTED_ABI_VERSION . ', got ' . $actual
+                . ' — the loaded binary predates the user-approved ABI-2'
+                . ' source-edit set; pin the matching native library'
             );
         }
-        return self::$ffi;
+    }
+
+    /**
+     * Source-edit C ABI (0.9): two extra exports sharing the standard
+     * return-0/1 + output-buffer + ktav_free pattern. Declared in a
+     * SEPARATE \FFI instance ONLY so that symbol resolution of the
+     * edit exports happens at a known point with a precise error; the
+     * ABI gate itself is SHARED (see ffi/assertAbiVersion) — an ABI-1
+     * binary is rejected for every native call, never a silent pure
+     * fallback.
+     */
+    private const EDIT_CDEF = <<<'C'
+        int ktav_edit_value(
+            const uint8_t *src, size_t src_len,
+            const uint8_t *path, size_t path_len,
+            const uint8_t *replacement, size_t replacement_len,
+            uint8_t **out_buf, size_t *out_len,
+            char **out_err, size_t *out_err_len);
+
+        int ktav_edit_value_segments(
+            const uint8_t *src, size_t src_len,
+            const uint8_t *path, size_t path_len,
+            const uint8_t *replacement, size_t replacement_len,
+            uint8_t **out_buf, size_t *out_len,
+            char **out_err, size_t *out_err_len);
+
+        int ktav_abi_version();
+        C;
+
+    private static ?\FFI $editFfi = null;
+
+    /**
+     * Expected C ABI version. Bumped 1 -> 2 by explicit user approval
+     * (2026-10-25): EVERY native operation rejects an ABI-1 binary at
+     * load time (see {@see assertAbiVersion}), not only the edit set.
+     */
+    public const EXPECTED_ABI_VERSION = 2;
+
+    /**
+     * FFI handle for the edit symbols. Symbol resolution happens at
+     * cdef() time, so a library without the edit exports fails HERE
+     * with a typed, actionable message; the ABI gate is the shared
+     * {@see assertAbiVersion} (same for all native calls).
+     */
+    private static function editFfi(): \FFI
+    {
+        if (self::$editFfi !== null) {
+            return self::$editFfi;
+        }
+        if (!extension_loaded('ffi')) {
+            throw new KtavException(
+                'PHP FFI extension is required (php.ini: ffi.enable=1).'
+            );
+        }
+        $path = NativeLoader::resolve();
+        try {
+            self::$editFfi = \FFI::cdef(self::EDIT_CDEF, $path);
+        } catch (\FFI\Exception $e) {
+            throw new KtavException(
+                'ktav_edit_value / ktav_edit_value_segments are not available in ' . $path
+                . ' — the loaded ktav_cabi does not export the ABI-'
+                . self::EXPECTED_ABI_VERSION . ' source-edit set.'
+                . ' Pin the native library that exports these symbols; no pure fallback is performed.'
+                . ' Detail: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+        self::assertAbiVersion((int) self::$editFfi->ktav_abi_version(), $path);
+        return self::$editFfi;
+    }
+
+    /**
+     * Call `ktav_edit_value` / `ktav_edit_value_segments`: three UTF-8
+     * byte inputs (source; textual path OR a JSON array of literal
+     * string segments; replacement on the tagged-numeric JSON wire),
+     * Ktav-source bytes out. Errors are the structured envelope with
+     * error = EditInvalidPath / EditNotFound / EditUnsupported.
+     *
+     * @throws KtavException carrying the structured envelope
+     */
+    public static function callEditBytes(string $fn, string $src, string $path, string $replacement): string
+    {
+        $ffi = self::editFfi();
+        $lens = [strlen($src), strlen($path), strlen($replacement)];
+        $inputs = [$src, $path, $replacement];
+
+        // One live byte per input (see callBytes for the NULL-with-len-0
+        // rationale); the pad byte is never read.
+        $buffers = [];
+        foreach ($inputs as $k => $input) {
+            $alloc = max(1, $lens[$k]);
+            $buf = $ffi->new("uint8_t[$alloc]", false);
+            if ($lens[$k] > 0) {
+                \FFI::memcpy($buf, $input, $lens[$k]);
+            }
+            $buffers[] = $buf;
+        }
+
+        $outBuf    = $ffi->new('uint8_t*');
+        $outLen    = $ffi->new('size_t');
+        $outErr    = $ffi->new('char*');
+        $outErrLen = $ffi->new('size_t');
+
+        try {
+            $rc = $ffi->{$fn}(
+                $buffers[0], $lens[0],
+                $buffers[1], $lens[1],
+                $buffers[2], $lens[2],
+                \FFI::addr($outBuf),
+                \FFI::addr($outLen),
+                \FFI::addr($outErr),
+                \FFI::addr($outErrLen),
+            );
+            if ($rc !== 0) {
+                $payload = self::copyAndFree($outErr, (int) $outErrLen->cdata);
+                self::freeIfPresent($outBuf, (int) $outLen->cdata);
+                $fields = $payload !== '' ? json_decode($payload, true) : null;
+                if (is_array($fields) && isset($fields['error']) && is_string($fields['error'])) {
+                    throw KtavException::fromEnvelope($fields);
+                }
+                throw new KtavException($payload !== '' ? $payload : 'native call failed with code ' . $rc);
+            }
+            self::freeIfPresent($outErr, (int) $outErrLen->cdata);
+            return self::copyAndFree($outBuf, (int) $outLen->cdata);
+        } finally {
+            foreach ($buffers as $buf) {
+                if ($buf !== null) {
+                    \FFI::free($buf);
+                }
+            }
+        }
     }
 
     /**

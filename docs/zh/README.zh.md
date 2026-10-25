@@ -92,6 +92,8 @@ $text = Ktav::dumps($doc);
 
 完整可运行示例见 [`examples/basic.php`](../../examples/basic.php)。
 
+> **尚未发布（0.9 准备版本）：** 这些编辑 API 和更新后的诊断不包含在已发布的 0.8.1 包中。原生后端需要固定的 0.9 核心（C-FFI 使用 C ABI 2）；纯实现仍完全独立。
+
 ## API
 
 | 方法 | 用途 |
@@ -138,6 +140,28 @@ FFI，选择原生模式也不会执行 PHP 解析。
   `canonicalFromSource`。
 - 纯模式需要启用标准 `ext-json`，但无需第三方 Composer 运行时依赖、
   FFI 或原生二进制。
+
+源码编辑（spec 0.9）。`editValue($source, $path, $replacement)` 和
+`editValueSegments($source, $segments, $replacement)` 会替换源文本中的
+已有值并返回新文本；输入不会被修改。只有目标字节（以及布局规则要求
+展开的 inline 包装）会改变：注释、键的拼写与顺序、dotted/inline/block
+形式、BOM、CR/LF/CRLF 和末尾 EOL 状态都会保留；即使源码拼写非规范，
+no-op 结果也与源码逐字节相同。文本路径 `key1.key2.0.key4` 以 `.` 为
+分隔符，`\.` 表示字面点号，`\\` 表示字面反斜杠；segments 是已解码的
+字面名称。错误是不同的信封代码：`EditInvalidPath`（body = 路径中的
+UTF-8 字节偏移）、`EditNotFound`（键缺失、索引越界、穿过标量、空
+路径）和 `EditUnsupported`（dotted/reopen 的非连续目标、对含注释
+容器的结构性替换、包含 CR 或行 `))` 的替换字符串）。源码解析失败会
+抛出普通的解析器信封。原生侧这些方法需要导出源码编辑 ABI（版本 2）
+的 `ktav_cabi`；旧二进制会以明确的版本错误被拒绝，绝不会静默退化为
+纯 PHP 后备。空 PHP 数组作为替换值遵循嵌套空 LIST 约定；类型化载荷
+（`['$i' => …]`、`['$f' => …]`）经过与原生编解码器相同的严格 wire-ingest
+—— `$i` 会规范化（去掉显式 `+`、裁剪多余的先导零、带符号零归一化为
+`0`、大数按位精确），`$f` 必须是十进制词法形式并按最短往返形式重新
+输出；任何无效载荷都是 `Message` 传输失败，绝不会被强转成标量。
+Integer 身份是精确的数字串比较，Float 身份是精确的 f64 比较（保留零
+的符号，不经过 `precision` 的字符串转换）；Object 相等会忽略键顺序
+（Rust IndexMap PartialEq），数组保持有序。
 
 ### 格式化
 

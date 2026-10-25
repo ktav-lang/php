@@ -95,6 +95,33 @@ final class PureBackend
     }
 
     /**
+     * Pure source edit: replace an existing value at a textual path
+     * (see \Ktav\Ktav::editValue for the full contract — same rules,
+     * same envelopes, no native artifact). The source is spliced by
+     * byte ranges from a positional tree; every patch is re-parsed and
+     * semantically verified.
+     *
+     * @param mixed $replacement
+     * @throws KtavException
+     */
+    public static function editValue(string $src, string $path, $replacement): string
+    {
+        return Pure\Edit\EditSplice::editValue($src, $path, $replacement);
+    }
+
+    /**
+     * Pure source edit with pre-decoded literal segments.
+     *
+     * @param string[] $segments
+     * @param mixed $replacement
+     * @throws KtavException
+     */
+    public static function editValueSegments(string $src, array $segments, $replacement): string
+    {
+        return Pure\Edit\EditSplice::editValueSegments($src, $segments, $replacement);
+    }
+
+    /**
      * Pure-backend version marker (`pure-0.8.1` style) — never a
      * native version; the native one stays `Ktav::nativeVersion()`.
      */

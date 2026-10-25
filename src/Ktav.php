@@ -140,8 +140,88 @@ final class Ktav
     }
 
     /**
-     * Version string reported by the loaded `ktav_cabi`. Useful for
-     * sanity checks against {@see ExpectedNativeVersion}.
+     * Replace an EXISTING value in Ktav SOURCE TEXT at a textual path
+     * (spec 0.9 source edit). Only the bytes of the target (and of the
+     * inline wrappers the layout criterion forces to expand) change —
+     * never parse-mutate-serialize of the whole document: comments,
+     * key spelling/order, dotted/inline/block forms, BOM, CR/LF/CRLF
+     * and EOF bytes outside the edit are preserved. Byte-identical
+     * no-op when the replacement equals the current value.
+     *
+     * Path: `key1.key2.0.key4`, separator '.', literal dot `\.`,
+     * literal backslash `\\`; other escapes, dangling escapes and
+     * empty segments are EditInvalidPath (body = UTF-8 byte offset).
+     * Numeric segments are keys in Objects and zero-based ASCII-digit
+     * indexes (leading zeros allowed, no signs) in Arrays; missing
+     * key / overflow / scalar descent / empty path is EditNotFound.
+     *
+     * $replacement is a PHP value; int/float/string/bool/null keep
+     * their type (arbitrary integers pass `['$i' => '<digits>']`,
+     * exact float lexemes `['$f' => '<lexeme>']`). Errors:
+     * EditInvalidPath / EditNotFound / EditUnsupported envelopes; the
+     * SOURCE itself failing to parse raises the ordinary 0.9 parser
+     * envelope. Requires a ktav_cabi that exports the source-edit
+     * symbols — an older binary raises a clear unsupported error, no
+     * pure fallback.
+     *
+     * @param mixed $replacement
+     * @throws KtavException
+     */
+    public static function editValue(string $source, string $path, $replacement): string
+    {
+        return NativeLib::callEditBytes(
+            'ktav_edit_value',
+            $source,
+            $path,
+            WireJson::encode($replacement)
+        );
+    }
+
+    /**
+     * {@see editValue} with pre-decoded literal segments (no extra
+     * unescaping — a segment containing '.' is that literal key).
+     *
+     * @param string[] $segments
+     * @param mixed $replacement
+     * @throws KtavException
+     */
+    public static function editValueSegments(string $source, array $segments, $replacement): string
+    {
+        // The segments transport is a JSON array of literal strings.
+        // A json_encode failure is surfaced as a typed transport error
+        // BEFORE any native call — the cause is never swallowed by a
+        // silent (string) cast to empty path bytes, and no partial
+        // edit can happen.
+        $pathJson = json_encode(array_values($segments), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($pathJson === false) {
+            throw KtavException::fromEnvelope([
+                'error' => 'Message',
+                'reason' => null,
+                'line' => null,
+                'line_text' => null,
+                'span' => null,
+                'path' => null,
+                'canonical' => null,
+                'spec_section' => null,
+                'body' => null,
+                'message' => 'edit segments transport is not JSON-encodable: '
+                    . json_last_error_msg(),
+            ]);
+        }
+        return NativeLib::callEditBytes(
+            'ktav_edit_value_segments',
+            $source,
+            $pathJson,
+            WireJson::encode($replacement)
+        );
+    }
+
+    /**
+     * Version string reported by the loaded `ktav_cabi`. With the
+     * immutable git-core pin the string is informational; the
+     * AUTHORITATIVE compatibility gate is the C ABI version (see
+     * NativeLib::EXPECTED_ABI_VERSION — every native call is served
+     * only by an ABI-2 binary).
      */
     public static function nativeVersion(): string
     {
@@ -149,9 +229,10 @@ final class Ktav
     }
 
     /**
-     * Native library version this build was compiled against. If
-     * {@see nativeVersion()} differs at runtime, the loaded binary
-     * was not the one we expected.
+     * Release-tag version this build's release artifacts are cut from
+     * (download cache path / release URL). NOT a runtime gate: since
+     * the ABI-2 git-core pin, compatibility is enforced by the C ABI
+     * version check at load time, not by this string.
      */
     public const ExpectedNativeVersion = NativeLib::LIB_VERSION;
 

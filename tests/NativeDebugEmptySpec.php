@@ -30,13 +30,13 @@ describe('native debug ABI: empty input', function () {
         if (!extension_loaded('ffi')) {
             throw new \RuntimeException('ext-ffi required for the native debug ABI regression');
         }
-        // Provenance gate: NativeLib::ffi() already throws
-        // KtavException on a version mismatch (src/NativeLib.php:89-96),
-        // so this call fails the run on a stale binary.
-        if (Ktav::nativeVersion() !== '0.8.1') {
-            throw new \RuntimeException(
-                'loaded ktav_cabi does not report 0.8.1 — stale artifact'
-            );
+        // Provenance gate: NativeLib::ffi() throws KtavException on any
+        // non-ABI-2 binary (src/NativeLib.php assertAbiVersion), so the
+        // first native call below fails the run on a stale ABI-1
+        // artifact. With the immutable git-core pin the version STRING
+        // is informational — only non-emptiness is asserted here.
+        if (Ktav::nativeVersion() === '') {
+            throw new \RuntimeException('loaded ktav_cabi reports an empty version');
         }
     });
 

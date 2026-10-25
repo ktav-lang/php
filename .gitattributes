@@ -1,3 +1,6 @@
 * text=auto eol=lf
+
+# Polydoc требует пустую строку в конце промежуточных source parts.
+root-docs/**/body-*.md whitespace=-blank-at-eof
 *.bat text eol=crlf
 *.cmd text eol=crlf
