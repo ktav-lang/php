@@ -4,6 +4,8 @@ export default [
   "quick-start",
   "source-edit-status",
   "api",
+  "editing-cookbook",
+  "diagnostics09",
   "formatting",
   "errors",
   "type-mapping",
