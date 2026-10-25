@@ -46,8 +46,9 @@ describe('pure source edit layout regressions (22)', function () {
     };
 
     it('expands for a multiline replacement string', function () use ($edit) {
+        // The untouched sibling stays as its own block line.
         expect($edit("cfg: {a: 1, b: 2}\n", 'cfg.a', "line1\nline2"))
-            ->toBe("cfg: {\n    a: ((\nline1\nline2\n    ))\n}\n");
+            ->toBe("cfg: {\n    a: ((\nline1\nline2\n    ))\n    b: 2\n}\n");
     });
 
     it('expands when the line grows beyond 100 scalars', function () use ($edit) {

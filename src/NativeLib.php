@@ -139,6 +139,8 @@ final class NativeLib
             char **out_err, size_t *out_err_len);
 
         int ktav_abi_version();
+
+        void ktav_free(uint8_t *ptr, size_t len);
         C;
 
     private static ?\FFI $editFfi = null;
@@ -227,16 +229,22 @@ final class NativeLib
                 \FFI::addr($outErrLen),
             );
             if ($rc !== 0) {
-                $payload = self::copyAndFree($outErr, (int) $outErrLen->cdata);
-                self::freeIfPresent($outBuf, (int) $outLen->cdata);
+                // Free through the SAME FFI instance that produced the
+                // pointers: CData types are per-instance, and the base
+                // instance's ktav_free(uint8_t*) rejects a char* from
+                // this one (CI: "Passing incompatible argument 1 of
+                // C function 'ktav_free'"). char* is cast to uint8_t*
+                // — same pointer, FFI-visible type only.
+                $payload = self::copyAndFreeEdit($ffi, $outErr, (int) $outErrLen->cdata);
+                self::freeIfPresentEdit($ffi, $outBuf, (int) $outLen->cdata);
                 $fields = $payload !== '' ? json_decode($payload, true) : null;
                 if (is_array($fields) && isset($fields['error']) && is_string($fields['error'])) {
                     throw KtavException::fromEnvelope($fields);
                 }
                 throw new KtavException($payload !== '' ? $payload : 'native call failed with code ' . $rc);
             }
-            self::freeIfPresent($outErr, (int) $outErrLen->cdata);
-            return self::copyAndFree($outBuf, (int) $outLen->cdata);
+            self::freeIfPresentEdit($ffi, $outErr, (int) $outErrLen->cdata);
+            return self::copyAndFreeEdit($ffi, $outBuf, (int) $outLen->cdata);
         } finally {
             foreach ($buffers as $buf) {
                 if ($buf !== null) {
@@ -244,6 +252,30 @@ final class NativeLib
                 }
             }
         }
+    }
+
+    /**
+     * copyAndFree counterpart bound to the EDIT FFI instance (the
+     * output pointers come from its cdef). $ptr may be a char* (the
+     * contract's out_err) — cast to the declared uint8_t*.
+     */
+    private static function copyAndFreeEdit(\FFI $ffi, $ptr, int $len): string
+    {
+        if ($len <= 0 || $ptr === null) {
+            return '';
+        }
+        $bytes = \FFI::string($ptr, $len);
+        $ffi->ktav_free($ffi->cast('uint8_t*', $ptr), $len);
+        return $bytes !== false ? $bytes : '';
+    }
+
+    /** freeIfPresent counterpart bound to the EDIT FFI instance. */
+    private static function freeIfPresentEdit(\FFI $ffi, $ptr, int $len): void
+    {
+        if ($len <= 0 || $ptr === null) {
+            return;
+        }
+        $ffi->ktav_free($ffi->cast('uint8_t*', $ptr), $len);
     }
 
     /**

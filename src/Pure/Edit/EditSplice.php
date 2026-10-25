@@ -1488,7 +1488,14 @@ final class EditSplice
         }
         $object = substr($body, 0, 1) === '{';
         $kind = $object ? 'o' : 'a';
-        $scan = \Ktav\Pure\PureInlineScan::scan($body, $kind, 1, strlen($body) - 1);
+        // COORDINATE BASIS: PureInlineScan::scan REQUIRES its region to
+        // include this compound's own closing delimiter (it stops
+        // there and reports its offset) — unlike the Rust
+        // split_top_level, which works on the inner slice. The region
+        // [1, strlen(body)) covers inner + closer; [1, strlen-1) would
+        // never see the closer and report "positioning failed" for
+        // every valid inline body.
+        $scan = \Ktav\Pure\PureInlineScan::scan($body, $kind, 1, strlen($body));
         if ($scan['badEscape'] !== null || $scan['closer'] === null) {
             throw EditEnvelope::unsupported('cannot split inline layout');
         }

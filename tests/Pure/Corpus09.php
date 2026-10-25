@@ -146,6 +146,39 @@ final class Corpus09
     }
 
     /**
+     * Recursive $suffix collector under $dir. For `valid` the derived
+     * <stem>.canonical.ktav companions are excluded (they are
+     * expectations, not counted fixtures).
+     *
+     * @return string[]
+     */
+    private static function collectFiles(string $dir, string $suffix, bool $excludeCanonical): array
+    {
+        $len = strlen($suffix);
+        $out = [];
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            if (is_dir($path)) {
+                foreach (self::collectFiles($path, $suffix, $excludeCanonical) as $f) {
+                    $out[] = $f;
+                }
+                continue;
+            }
+            if (substr($entry, -$len) !== $suffix) {
+                continue;
+            }
+            if ($excludeCanonical && substr($entry, -15) === '.canonical.ktav') {
+                continue;
+            }
+            $out[] = $path;
+        }
+        return $out;
+    }
+
+    /**
      * Validate the closed category/count contract and collect fixture
      * STEMS. Category shapes differ (unrepresentable has no .ktav).
      * Any deviation throws.
@@ -165,19 +198,12 @@ final class Corpus09
                 throw new \RuntimeException('spec 0.9 corpus category dir missing: ' . $catDir);
             }
             $suffix = $cat === 'unrepresentable' ? '.json' : '.ktav';
-            $len = strlen($suffix);
-            $files = [];
-            foreach (scandir($catDir) ?: [] as $entry) {
-                if (!is_file($catDir . '/' . $entry) || substr($entry, -$len) !== $suffix) {
-                    continue;
-                }
-                // valid/ carries <stem>.canonical.ktav companions — they
-                // are derived expectations, not counted fixtures.
-                if ($cat === 'valid' && substr($entry, -15) === '.canonical.ktav') {
-                    continue;
-                }
-                $files[] = $catDir . '/' . $entry;
-            }
+            // Fixtures live in NESTED per-topic subdirectories
+            // (valid/arrays/…, invalid/diagnostics09/…, …) — a flat
+            // scandir sees only directories and finds ZERO fixtures
+            // (CI PR1: "declares 228 valid fixtures, found 0"). Walk
+            // the tree.
+            $files = self::collectFiles($catDir, $suffix, $cat === 'valid');
             sort($files);
             if (count($files) !== $count) {
                 throw new \RuntimeException(

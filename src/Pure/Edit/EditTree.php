@@ -143,12 +143,17 @@ final class EditTree
         if ($this->rootInline !== null) {
             return [$this->rootInline, $this->rootExplicit];
         }
-        $root = array_pop($this->stack);
-        if ($root === null) {
+        $frame = array_pop($this->stack);
+        if ($frame === null) {
             return [self::compoundNode('object'), false]; // empty document
         }
-        $root['slot'] = null;
-        return [$root, $this->rootExplicit];
+        // The ROOT node is the frame's VALUE, not the frame itself: a
+        // frame carries kind/rangeStart/pendingKey bookkeeping, and
+        // returning it handed descend a node-shaped array WITHOUT the
+        // pairs/items fields (the "Undefined array key pairs" class).
+        $node = $frame['node'];
+        $node['slot'] = null;
+        return [$node, $this->rootExplicit];
     }
 
     // -----------------------------------------------------------------
@@ -540,7 +545,7 @@ final class EditTree
      */
     private function positionInline(int $vs, int $te, string $kind): array
     {
-        $scan = PureInlineScan::scan($this->src, $kind, $vs + 1, $te);
+        $scan = PureInlineScan::scan($this->src, $kind === 'object' ? 'o' : 'a', $vs + 1, $te);
         if ($scan['badEscape'] !== null || $scan['closer'] === null) {
             throw new \RuntimeException('inline positioning failed');
         }
