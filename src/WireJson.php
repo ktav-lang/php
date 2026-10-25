@@ -154,9 +154,7 @@ final class WireJson
             return $out;
         }
         if ($editObjects && $v instanceof \stdClass) {
-            // Empty only — non-empty is refused by encodeEditReplacement
-            // on the top level and right here for nested values, so a
-            // self-referencing stdClass can never recurse.
+            // Empty stdClass only; non-empty is a Message, never recursion.
             if ((array) $v !== []) {
                 throw KtavException::fromEnvelope([
                     'error' => 'Message',

@@ -465,7 +465,11 @@ final class EditTree
                     throw new \RuntimeException('blocked path');
                 }
                 // Reopen: the intermediate object is noncontiguous.
-                $next['slot'] = null;
+                // IN PLACE on the stored node — PHP arrays are value
+                // types, so nulling a COPY ($next['slot']) would leave
+                // the tree's slot valid and route a noncontiguous whole
+                // target into the splice + semantic guard instead.
+                $table['pairs'][$idx][1]['slot'] = null;
                 $table = &$table['pairs'][$idx][1];
                 continue;
             }
@@ -662,8 +666,8 @@ final class EditTree
             // chain noncontiguous like the Rust descend would.
             $table['pairs'][$idx][1]['slot'] = null;
             if ($table['pairs'][$idx][1]['kind'] === 'object' && $child['kind'] === 'object') {
+                $sub = &$table['pairs'][$idx][1]; // in place: arrays copy
                 foreach ($child['pairs'] as $pair) {
-                    $sub = $table['pairs'][$idx][1];
                     $existing = self::findEntry($sub, $pair[0]);
                     if ($existing !== null) {
                         $sub['pairs'][$existing][1] = $pair[1];
@@ -671,6 +675,7 @@ final class EditTree
                         $sub['pairs'][] = $pair;
                     }
                 }
+                unset($sub);
                 return;
             }
             $table['pairs'][$idx][1] = $child;

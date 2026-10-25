@@ -294,28 +294,16 @@ final class EditEnvelope
         return [$out, $had];
     }
 
-    /** Unicode scalar value count (byte walk, no preg / mbstring). */
+    /** Unicode scalar value count (byte walk, no preg / mbstring).
+     * A scalar is any byte that is NOT a continuation byte (10xxxxxx)
+     * — valid UTF-8 input makes this exact. */
     public static function countScalars(string $s): int
     {
         $n = strlen($s);
         $count = 0;
-        $i = 0;
-        while ($i < $n) {
-            $b = ord($s[$i]);
-            if ($b < 0x80 || $b >= 0xC0) {
+        for ($i = 0; $i < $n; ++$i) {
+            if ((ord($s[$i]) & 0xC0) !== 0x80) {
                 ++$count;
-                ++$i;
-                continue;
-            }
-            // Continuation byte (valid UTF-8 input): part of the current
-            // code point — skip the whole sequence.
-            ++$count;
-            if ($b >= 0xC2 && $b <= 0xDF) {
-                $i += 2;
-            } elseif ($b >= 0xE0 && $b <= 0xEF) {
-                $i += 3;
-            } else {
-                $i += 4;
             }
         }
         return $count;
