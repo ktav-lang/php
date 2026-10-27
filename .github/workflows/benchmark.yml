@@ -1,0 +1,57 @@
+name: Mutation benchmark (manual)
+
+on:
+  pull_request:
+    paths:
+      - 'bench/mutations.php'
+      - '.github/workflows/benchmark.yml'
+      - 'src/**'
+  workflow_dispatch:
+    inputs:
+      warmups:
+        description: Warmup mutation iterations per fixture/backend
+        required: false
+        default: '5'
+      repetitions:
+        description: Timed mutation iterations per fixture/backend
+        required: false
+        default: '30'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native release library
+        run: cargo build --release -p ktav-cabi
+      - name: Setup PHP 7.4 with FFI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: ffi, json, mbstring
+          ini-values: ffi.enable=1
+      - name: Install Composer dependencies and generate autoloader
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Run mutation benchmark
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+          BENCH_WARMUPS: ${{ inputs.warmups }}
+          BENCH_REPETITIONS: ${{ inputs.repetitions }}
+          BENCH_SERIES: '7'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -d ffi.enable=1 bench/mutations.php | tee mutation-benchmark.json
+      - name: Publish benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-benchmark-results
+          path: mutation-benchmark.json
+          if-no-files-found: warn
