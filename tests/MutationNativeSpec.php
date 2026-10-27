@@ -345,22 +345,52 @@ b: 2
         );
     });
 
-    it('covers quoted inline members, escaped commas and ArrayObject mutation parity', function () use ($requireMutationAbi, $compareSuccess) {
+    it('covers quoted inline members, escaped commas and associative-array mutation parity', function () use ($requireMutationAbi, $compareSuccess) {
         $requireMutationAbi();
         $compareSuccess(
             function () { return Ktav::insertValue("a: {x: 1}\n", 'a.k', 'p,q'); },
             function () { return PureBackend::insertValue("a: {x: 1}\n", 'a.k', 'p,q'); },
             "a: {x: 1, k: p\\,q}\n"
         );
-        $arrayObject = new \ArrayObject(['x' => 1, 'y' => 2]);
+        $arrayValue = ['x' => 1, 'y' => 2];
         $expected = "base: 0\nobj: {\n    x: 1\n    y: 2\n}\n";
         $compareSuccess(
-            function () use ($arrayObject) { return Ktav::insertValue("base: 0\n", 'obj', $arrayObject); },
-            function () use ($arrayObject) { return PureBackend::insertValue("base: 0\n", 'obj', $arrayObject); },
+            function () use ($arrayValue) { return Ktav::insertValue("base: 0\n", 'obj', $arrayValue); },
+            function () use ($arrayValue) { return PureBackend::insertValue("base: 0\n", 'obj', $arrayValue); },
             $expected
         );
     });
 
+    it('matches Message bodies for nonempty stdClass edit values', function () use ($compareError) {
+        $bad = (object) ['x' => 1];
+        $compareError(
+            function () use ($bad) { return Ktav::insertValue("base: 0\n", 'obj', $bad); },
+            function () use ($bad) { return PureBackend::insertValue("base: 0\n", 'obj', $bad); },
+            'Message'
+        );
+    });
+
+    it('rejects ArrayObject mutation values as typed messages without source fields', function () use ($requireMutationAbi) {
+        $requireMutationAbi();
+        foreach ([
+            function () { return Ktav::insertValue("base: 0\n", 'obj', new \ArrayObject(['x' => 1])); },
+            function () { return PureBackend::insertValue("base: 0\n", 'obj', new \ArrayObject(['x' => 1])); },
+        ] as $call) {
+            $error = null;
+            try { $call(); } catch (KtavException $e) { $error = $e; }
+            expect($error)->toBeAnInstanceOf(KtavException::class);
+            expect($error->getError())->toBe('Message');
+            expect($error->getBody())->toBe('edit replacement transport: unsupported PHP type object');
+            expect($error->getMessage())->toBe('edit replacement transport: unsupported PHP type object');
+            expect($error->getErrorLine())->toBe(null);
+            expect($error->getSpan())->toBe(null);
+            expect($error->getPath())->toBe(null);
+            expect($error->getReason())->toBe(null);
+            expect($error->getLineText())->toBe(null);
+            expect($error->getCanonical())->toBe(null);
+            expect($error->getSpecSection())->toBe(null);
+        }
+    });
     it('preserves trailing commas, UTF-8, i64 values and untouched source spelling', function () use ($requireMutationAbi, $compareSuccess, $compareError) {
         $requireMutationAbi();
         $src = "a: {old: +01,}\n";

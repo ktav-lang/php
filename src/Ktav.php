@@ -169,7 +169,6 @@ final class Ktav
      */
     public static function editValue(string $source, string $path, $replacement): string
     {
-        self::validateEditSource($source);
         return NativeLib::callEditBytes(
             'ktav_edit_value',
             $source,
@@ -188,7 +187,6 @@ final class Ktav
      */
     public static function editValueSegments(string $source, array $segments, $replacement): string
     {
-        self::validateEditSource($source);
         // The segments transport is a JSON array of literal strings.
         // A json_encode failure is surfaced as a typed transport error
         // BEFORE any native call — the cause is never swallowed by a

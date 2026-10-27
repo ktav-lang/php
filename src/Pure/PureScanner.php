@@ -105,6 +105,37 @@ final class PureScanner
         return [$start, $end];
     }
 
+    /** Rust std::str::Utf8Error Display wording for the first error. */
+    public static function utf8ErrorDisplay(string $s, array $span): string
+    {
+        $start = $span[0];
+        $first = ord($s[$start]);
+        $expected = $first >= 0xC2 && $first <= 0xDF ? 2
+            : ($first >= 0xE0 && $first <= 0xEF ? 3
+                : ($first >= 0xF0 && $first <= 0xF4 ? 4 : 1));
+        if ($expected === 1) {
+            $length = 1;
+        } else {
+            $validPrefix = 1;
+            $n = strlen($s);
+            while ($validPrefix < $expected && $start + $validPrefix < $n) {
+                $byte = ord($s[$start + $validPrefix]);
+                $valid = $byte >= 0x80 && $byte <= 0xBF;
+                if ($validPrefix === 1 && $first === 0xE0) { $valid = $byte >= 0xA0 && $byte <= 0xBF; }
+                elseif ($validPrefix === 1 && $first === 0xED) { $valid = $byte >= 0x80 && $byte <= 0x9F; }
+                elseif ($validPrefix === 1 && $first === 0xF0) { $valid = $byte >= 0x90 && $byte <= 0xBF; }
+                elseif ($validPrefix === 1 && $first === 0xF4) { $valid = $byte >= 0x80 && $byte <= 0x8F; }
+                if (!$valid) { break; }
+                ++$validPrefix;
+            }
+            if ($start + $validPrefix === strlen($s) && $validPrefix < $expected) {
+                return 'incomplete utf-8 byte sequence from index ' . $start;
+            }
+            $length = $validPrefix;
+        }
+        return 'invalid utf-8 sequence of ' . $length . ' bytes from index ' . $start;
+    }
+
     /**
      * Byte length of the § 3.3 whitespace code point at $i (0 when not
      * whitespace). $inline excludes LF/CR (the line-bounded view).

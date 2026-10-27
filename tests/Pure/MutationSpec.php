@@ -39,8 +39,8 @@ b: 2
             ->toBe("## heading\nsettings: {old: +01, new: 2}\n## tail\n");
     });
 
-    it('handles ArrayObject values', function () {
-        expect(PureBackend::insertValue("base: 0\n", 'obj', new \ArrayObject(['x' => 1, 'y' => 2])))
+    it('handles associative array values', function () {
+        expect(PureBackend::insertValue("base: 0\n", 'obj', ['x' => 1, 'y' => 2]))
             ->toBe("base: 0\nobj: {\n    x: 1\n    y: 2\n}\n");
     });
 

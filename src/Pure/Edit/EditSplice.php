@@ -245,47 +245,7 @@ final class EditSplice
 
     private static function utf8Error(string $value): string
     {
-        $span = PureScanner::validateUtf8($value);
-        $start = $span[0];
-        $end = $span[1];
-        $length = $end - $start;
-        $first = ord($value[$start]);
-
-        // Rust's Utf8Error reports error_len as the number of bytes up to
-        // (but not including) the first byte that cannot continue the
-        // sequence. Only a genuinely truncated, still-valid prefix at EOF
-        // has error_len == None. Constrained second-byte failures (e.g.
-        // E0 80) are invalid immediately, even when EOF follows.
-        $expected = $first >= 0xC2 && $first <= 0xDF ? 2
-            : ($first >= 0xE0 && $first <= 0xEF ? 3
-                : ($first >= 0xF0 && $first <= 0xF4 ? 4 : 1));
-        if ($expected === 1) {
-            // Illegal lead bytes are their own error, regardless of any
-            // continuation bytes that the scanner groups into its span.
-            $length = 1;
-        } elseif ($expected > 1) {
-            $validPrefix = 1;
-            while ($validPrefix < $expected && $start + $validPrefix < strlen($value)) {
-                $byte = ord($value[$start + $validPrefix]);
-                $position = $validPrefix;
-                $valid = $byte >= 0x80 && $byte <= 0xBF;
-                if ($position === 1 && $first === 0xE0) { $valid = $byte >= 0xA0 && $byte <= 0xBF; }
-                elseif ($position === 1 && $first === 0xED) { $valid = $byte >= 0x80 && $byte <= 0x9F; }
-                elseif ($position === 1 && $first === 0xF0) { $valid = $byte >= 0x90 && $byte <= 0xBF; }
-                elseif ($position === 1 && $first === 0xF4) { $valid = $byte >= 0x80 && $byte <= 0x8F; }
-                if (!$valid) { break; }
-                ++$validPrefix;
-            }
-            if ($start + $validPrefix === strlen($value) && $validPrefix < $expected) {
-                return 'incomplete utf-8 byte sequence from index ' . $start;
-            }
-            if ($validPrefix > 1) {
-                $length = $validPrefix;
-            } elseif ($length > 1 && $first >= 0xC2 && $first <= 0xF4) {
-                $length = 1;
-            }
-        }
-        return 'invalid utf-8 sequence of ' . $length . ' bytes from index ' . $start;
+        return PureScanner::utf8ErrorDisplay($value, PureScanner::validateUtf8($value));
     }
 
     private static function validateMutationSegments(array $segments): void
