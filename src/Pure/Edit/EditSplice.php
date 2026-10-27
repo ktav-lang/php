@@ -6,6 +6,7 @@ namespace Ktav\Pure\Edit;
 
 use Ktav\KtavException;
 use Ktav\Pure\PureFloat;
+use Ktav\Pure\PureInlineScan;
 use Ktav\Pure\PureParser;
 use Ktav\Pure\PureScanner;
 use Ktav\Pure\PureText;
@@ -62,7 +63,7 @@ final class EditSplice
                 if (PureScanner::validateUtf8($path) !== null) {
                     // Transport decode failure: the path argument is
                     // not valid UTF-8 (source-less Message envelope).
-                    throw EditEnvelope::message('edit path is not valid UTF-8');
+                    throw EditEnvelope::message('path is not valid UTF-8: ' . self::utf8Error($path));
                 }
                 return self::parsePath($path);
             },
@@ -102,6 +103,699 @@ final class EditSplice
             },
             $replacement
         );
+    }
+
+    /** Remove an existing value while preserving untouched source bytes. */
+    public static function removeValue(string $src, string $path): string
+    {
+        PureParser::parse($src, false);
+        if (PureScanner::validateUtf8($path) !== null) {
+            throw EditEnvelope::message('path is not valid UTF-8: ' . self::utf8Error($path));
+        }
+        return self::removeValueSegments($src, self::parsePath($path));
+    }
+
+    /** @param string[] $segments */
+    public static function removeValueSegments(string $src, array $segments): string
+    {
+        $original = EditEnvelope::toCval(PureParser::parse($src, false));
+        self::validateMutationSegments($segments);
+        $target = self::lookupValue($original, $segments);
+        if ($target === null) { throw EditEnvelope::notFound(); }
+        list($root,) = EditTree::build($src);
+        $node = self::nodeAt($root, $segments);
+        list($from, $to, $strippedLead) = self::mutationRange($src, $root, $segments, $node);
+        if ($node['kind'] !== 'scalar') {
+            $skip = [];
+            self::collectMultilineScalarRanges($node, $skip);
+            if (self::hasCommentLine($src, $from, $to, $skip)) {
+                throw EditEnvelope::unsupported('target contains comment lines; removal cannot preserve them losslessly');
+            }
+        }
+        $expected = $original;
+        if (self::removeCvalTarget($expected, $segments) === null) { throw EditEnvelope::notFound(); }
+        $parents = array_slice($segments, 0, -1);
+        $materialized = null;
+        if ($parents !== []) {
+            $emptiedFrom = null;
+            for ($start = 0; $start < count($parents); ++$start) {
+                $allEmpty = true;
+                for ($k = $start; $k < count($parents); ++$k) {
+                    $ancestor = self::lookupValue($expected, array_slice($parents, 0, $k + 1));
+                    if ($ancestor === null || $ancestor['t'] !== 'object' || $ancestor['pairs'] !== []) { $allEmpty = false; break; }
+                }
+                if ($allEmpty) { $emptiedFrom = $start; break; }
+            }
+            if ($emptiedFrom !== null) {
+                $synthetic = self::nodeAt($root, array_slice($parents, 0, $emptiedFrom + 1))['slot'] === null;
+                $containerDepth = 0;
+                for ($i = 0; $i < count($parents); ++$i) {
+                    if (self::nodeAt($root, array_slice($parents, 0, $i + 1))['slot'] !== null) { $containerDepth = $i + 1; }
+                }
+                if ($synthetic && $emptiedFrom >= $containerDepth) {
+                    $leadLen = $strippedLead ? (substr($src, $from, 2) === "\r\n" ? 2 : 1) : 0;
+                    $lineStart = $from + $leadLen;
+                    $indentEnd = $lineStart;
+                    while ($indentEnd < strlen($src) && ($wsLen = PureScanner::wsLenAt($src, $indentEnd, strlen($src), false)) > 0) { $indentEnd += $wsLen; }
+                    $indent = substr($src, $lineStart, $indentEnd - $lineStart);
+                    $key = implode('.', array_map([self::class, 'escapedKeySegment'], array_slice($parents, $containerDepth)));
+                    $materialized = substr($src, $from, $leadLen) . $indent . $key . ': {}';
+                    if ($to > $from && ($src[$to - 1] === "\n" || $src[$to - 1] === "\r")) {
+                        $eolStart = $src[$to - 1] === "\n" && $to >= 2 && $src[$to - 2] === "\r" ? $to - 2 : $to - 1;
+                        $materialized .= substr($src, $eolStart, $to - $eolStart);
+                    }
+                }
+            }
+        }
+        $cut = static function (?string $replacement) use ($src, $from, $to): string {
+            return substr($src, 0, $from) . ($replacement ?? '') . substr($src, $to);
+        };
+        $candidate = $cut(null);
+        try {
+            $actual = EditEnvelope::toCval(PureParser::parse($candidate, false));
+            if (EditEnvelope::cvalEqual($actual, $expected)) { return $candidate; }
+        } catch (KtavException $ignored) {
+            // A plain cut can be unparseable when it prunes a synthetic dotted ancestor.
+        }
+        $candidate = $cut($materialized);
+        try {
+            $actual = EditEnvelope::toCval(PureParser::parse($candidate, false));
+        } catch (KtavException $ignored) {
+            throw EditEnvelope::unsupported('candidate source does not parse; no lossless edit produced');
+        }
+        if (!EditEnvelope::cvalEqual($actual, $expected)) {
+            throw EditEnvelope::unsupported('semantic mismatch after splice; no lossless edit produced');
+        }
+        return $candidate;
+    }
+
+    /** Rename an existing Object member key without moving its value. */
+    public static function renameKey(string $src, string $path, string $newKey): string
+    {
+        PureParser::parse($src, false);
+        if (PureScanner::validateUtf8($path) !== null) { throw EditEnvelope::message('path is not valid UTF-8: ' . self::utf8Error($path)); }
+        return self::renameKeySegments($src, self::parsePath($path), $newKey);
+    }
+
+    /** @param string[] $segments */
+    public static function renameKeySegments(string $src, array $segments, string $newKey): string
+    {
+        $original = EditEnvelope::toCval(PureParser::parse($src, false));
+        self::validateMutationSegments($segments);
+        if (PureScanner::validateUtf8($newKey) !== null) { throw EditEnvelope::message('new key is not valid UTF-8: ' . self::utf8Error($newKey)); }
+        if ($newKey === '') { throw EditEnvelope::unsupported('empty key name is not representable'); }
+        $last = $segments[count($segments)-1];
+        $parentPath = array_slice($segments, 0, -1);
+        $parent = self::lookupValue($original, $parentPath);
+        if ($parent === null) { throw EditEnvelope::notFound(); }
+        if ($parent['t'] === 'array') {
+            throw EditEnvelope::unsupported('rename of an Array element is not supported; only Object keys can be renamed');
+        }
+        if ($parent['t'] !== 'object') { throw EditEnvelope::notFound(); }
+        if (self::cvalChild($parent, $last) === null) { throw EditEnvelope::notFound(); }
+        if ($last === $newKey) { return $src; }
+        if (self::cvalChild($parent, $newKey) !== null) { throw EditEnvelope::alreadyExists(); }
+        list($root,) = EditTree::build($src);
+        $parentNode = self::nodeAt($root, $parentPath);
+        $targetNode = self::nodeAt($parentNode, [$last]);
+        $colon = null;
+        if ($targetNode['slot'] !== null) {
+            if (isset($targetNode['slot']['colon'])) {
+                $colon = $targetNode['slot']['colon'];
+            } elseif (($targetNode['slot']['r'] ?? null) === 'block'
+                && isset($targetNode['slot']['anchor'])) {
+                $colon = $targetNode['slot']['anchor'];
+            }
+        }
+        if ($colon === null) {
+            throw EditEnvelope::unsupported('target is a noncontiguous value (dotted-key/reopen intermediate); no lossless rename range exists');
+        }
+        list($ks, $ke) = self::mutationKeyRange($src, $colon);
+        $encoded = self::escapedKeySegment($newKey);
+        $candidate = substr($src, 0, $ks) . $encoded . substr($src, $ke);
+        $expected = self::renameCval($original, $segments, $newKey);
+        try {
+            $actual = EditEnvelope::toCval(PureParser::parse($candidate, false));
+        } catch (KtavException $ignored) {
+            throw EditEnvelope::unsupported('candidate source does not parse; no lossless edit produced');
+        }
+        if (!EditEnvelope::cvalEqual($actual, $expected)) { throw EditEnvelope::unsupported('semantic mismatch after splice; no lossless edit produced'); }
+        return $candidate;
+    }
+
+    private static function utf8Error(string $value): string
+    {
+        return PureScanner::utf8ErrorDisplay($value, PureScanner::validateUtf8($value));
+    }
+
+    private static function validateMutationSegments(array $segments): void
+    {
+        if ($segments === []) { throw EditEnvelope::notFound(); }
+        foreach ($segments as $segment) {
+            if (!is_string($segment)) { throw EditEnvelope::message('edit segments transport must be a list of strings'); }
+            if (PureScanner::validateUtf8($segment) !== null) { throw EditEnvelope::message('edit segments transport contains invalid UTF-8'); }
+        }
+    }
+
+    private static function removeCvalTarget(array &$value, array $segments)
+    {
+        $last = array_pop($segments);
+        $parent = &self::cvalAtRef($value, $segments);
+        if ($parent['t'] === 'object') {
+            foreach ($parent['pairs'] as $i => $pair) if ($pair[0] === $last) { array_splice($parent['pairs'], $i, 1); return $pair[1]; }
+        } elseif ($parent['t'] === 'array') {
+            $i = self::parseIndex($last); if (isset($parent['items'][$i])) { $v=$parent['items'][$i]; array_splice($parent['items'], $i, 1); return $v; }
+        }
+        return null;
+    }
+
+    private static function &cvalAtRef(array &$value, array $segments): array
+    {
+        $cur = &$value;
+        foreach ($segments as $seg) {
+            if ($cur['t'] === 'object') { foreach ($cur['pairs'] as $i => $p) if ($p[0] === $seg) { $cur = &$cur['pairs'][$i][1]; continue 2; } }
+            elseif ($cur['t'] === 'array') { $i=self::parseIndex($seg); if (isset($cur['items'][$i])) { $cur = &$cur['items'][$i]; continue; } }
+            throw EditEnvelope::notFound();
+        }
+        return $cur;
+    }
+
+    private static function renameCval(array $value, array $segments, string $newKey): array
+    {
+        $last = array_pop($segments);
+        $parent = &self::cvalAtRef($value, $segments);
+        foreach ($parent['pairs'] as &$pair) { if ($pair[0] === $last) { $pair[0] = $newKey; break; } }
+        unset($pair);
+        return $value;
+    }
+
+    private static function mutationRange(string $src, array $root, array $segments, array $node): array
+    {
+        $slot=$node['slot'];
+        $strippedLead = false;
+        if ($slot === null) { throw EditEnvelope::unsupported('target is a noncontiguous value (dotted-key/reopen intermediate); no lossless removal range exists'); }
+        if (!empty($node['inline'])) {
+            $range = self::inlineRemovalRange($src, $root, $segments, $slot);
+            return [$range[0], $range[1], false];
+        }
+        $anchor=isset($slot['colon']) ? $slot['colon'] : $slot['start'];
+        $from=$anchor; while ($from>0 && $src[$from-1] !== "\n" && $src[$from-1] !== "\r") --$from;
+        if ($from === 0 && substr($src, 0, 3) === "\xEF\xBB\xBF") { $from=3; }
+        $to=$slot['end']; while ($to<strlen($src) && $src[$to] !== "\n" && $src[$to] !== "\r") ++$to;
+        if ($to<strlen($src)) { if ($src[$to] === "\r" && isset($src[$to+1]) && $src[$to+1] === "\n") $to+=2; else ++$to; }
+        if ($to === strlen($src) && !($src[$to - 1] === "\n" || $src[$to - 1] === "\r") && $from < $to && $from > 0) {
+            if ($src[$from - 1] === "\n") { --$from; if ($from > 0 && $src[$from - 1] === "\r") { --$from; } $strippedLead = true; }
+            elseif ($src[$from - 1] === "\r") { --$from; $strippedLead = true; }
+        }
+        return [$from, $to, $strippedLead];
+    }
+
+    private static function inlineRemovalRange(string $src, array $root, array $segments, array $slot): array
+    {
+        $parents = array_slice($segments, 0, -1);
+        $parent = self::nodeAt($root, $parents);
+        $bounds = self::inlineRange($root, $parent, $parents, $src);
+        if ($bounds === null && $parent['kind'] === 'array' && is_array($parent['slot'])) {
+            $parentSlot = $parent['slot'];
+            $bodyStart = $parentSlot['body0'] ?? $parentSlot['start'] ?? null;
+            if (($parentSlot['r'] === 'pair' || $parentSlot['r'] === 'item')
+                && $bodyStart !== null
+                && $bodyStart < $parentSlot['end']
+                && $src[$bodyStart] === '['
+                && $src[$parentSlot['end'] - 1] === ']') {
+                $bounds = [$bodyStart, $parentSlot['end']];
+            }
+        }
+        if ($bounds === null) { throw EditEnvelope::unsupported('internal: inline target without inline parent'); }
+        list($p0, $p1) = $bounds;
+        $body = substr($src, $p0, $p1 - $p0);
+        $object = $body[0] === '{';
+        $scan = PureInlineScan::scan($body, $object ? 'o' : 'a', 1, strlen($body));
+        if ($scan['badEscape'] !== null || $scan['closer'] === null) { throw EditEnvelope::unsupported('cannot split inline parent for removal'); }
+        $spans = [];
+        foreach ($scan['segs'] as $seg) {
+            list($s, $e) = PureScanner::trimBounds($body, $seg[0], $seg[1]);
+            if ($s < $e) { $spans[] = [$p0 + $s, $p0 + $e]; }
+        }
+        $anchor = isset($slot['colon']) ? $slot['colon'] : $slot['start'];
+        $pos = null;
+        foreach ($spans as $i => $span) { if ($span[0] <= $anchor && $anchor < $span[1]) { $pos = $i; break; } }
+        if ($pos === null) { throw EditEnvelope::unsupported('internal: target segment not found in inline parent'); }
+        if (count($spans) === 1) { return [$p0 + 1, $p1 - 1]; }
+        return $pos + 1 < count($spans) ? [$spans[$pos][0], $spans[$pos + 1][0]] : [$spans[$pos - 1][1], $spans[$pos][1]];
+    }
+
+    private static function mutationKeyRange(string $src, int $colon): array
+    {
+        $end = $colon;
+        while ($end > 0) {
+            $wsStart = max(0, $end - 3);
+            $wsLen = 0;
+            for ($k = $wsStart; $k < $end; ++$k) {
+                $len = PureScanner::wsLenAt($src, $k, $end, false);
+                if ($len > 0 && $k + $len === $end) { $wsLen = $len; break; }
+            }
+            if ($wsLen === 0) { break; }
+            $end -= $wsLen;
+        }
+        $start = $colon;
+        while ($start > 0 && $src[$start - 1] !== "\n" && $src[$start - 1] !== "\r") { --$start; }
+        if ($start === 0 && substr($src, 0, 3) === "\xEF\xBB\xBF") { $start = 3; }
+        $bytes = $src;
+        $boundary = $start;
+        $i = $start;
+        $segStart = true;
+        while ($i < $colon) {
+            if ($segStart) {
+                while ($i < $colon && ($wsLen = PureScanner::wsLenAt($bytes, $i, $colon, true)) > 0) { $i += $wsLen; }
+                if ($i < $colon && ($bytes[$i] === '"' || $bytes[$i] === "'" || $bytes[$i] === '`')) {
+                    $quote = $bytes[$i++];
+                    while ($i < $colon) {
+                        if ($bytes[$i] === '\\') { $i += 2; continue; }
+                        if ($bytes[$i++] === $quote) { break; }
+                    }
+                    $segStart = false;
+                    continue;
+                }
+                $segStart = false;
+            }
+            if ($bytes[$i] === '\\') { $i += 2; continue; }
+            if ($bytes[$i] === '.') { $segStart = true; $boundary = $i + 1; }
+            elseif ($bytes[$i] === ',' || $bytes[$i] === '{' || $bytes[$i] === '[') { $boundary = $i + 1; $segStart = true; }
+            ++$i;
+        }
+        while ($boundary < $end && ($wsLen = PureScanner::wsLenAt($bytes, $boundary, $end, true)) > 0) { $boundary += $wsLen; }
+        return [$boundary, $end];
+    }
+
+    /** Insert a new final Object key without ever overwriting. */
+    public static function insertValue(string $src, string $path, $replacement): string
+    {
+        // Source parse precedes path UTF-8/path grammar diagnostics.
+        PureParser::parse($src, false);
+        if (PureScanner::validateUtf8($path) !== null) {
+            throw EditEnvelope::message('path is not valid UTF-8: ' . self::utf8Error($path));
+        }
+        return self::insertValueSegments($src, self::parsePath($path), $replacement);
+    }
+
+    /** @param string[] $segments */
+    public static function insertValueSegments(string $src, array $segments, $replacement): string
+    {
+        $original = EditEnvelope::toCval(PureParser::parse($src, false));
+        if ($segments === []) {
+            throw EditEnvelope::notFound();
+        }
+        foreach ($segments as $segment) {
+            if (!is_string($segment)) {
+                throw EditEnvelope::message('edit segments transport must be a list of strings');
+            }
+            if (PureScanner::validateUtf8($segment) !== null) {
+                throw EditEnvelope::message('edit segments transport contains invalid UTF-8');
+            }
+        }
+        $c = self::publicToCval($replacement);
+        $parentSegments = array_slice($segments, 0, -1);
+        $key = $segments[count($segments) - 1];
+        $parent = self::lookupValue($original, $parentSegments);
+        if ($parent === null) {
+            throw EditEnvelope::notFound();
+        }
+        if ($parent['t'] === 'array') {
+            throw EditEnvelope::unsupported('insertion into an Array is not supported; only Object members can be created');
+        }
+        if ($parent['t'] !== 'object') {
+            throw EditEnvelope::notFound();
+        }
+        if (self::cvalChild($parent, $key) !== null) {
+            throw EditEnvelope::alreadyExists();
+        }
+        return self::insertSplice($src, $original, $parentSegments, $key, $c);
+    }
+
+    /** @param string[] $parentSegments */
+    private static function insertSplice(string $src, $original, array $parentSegments, string $key, array $c): string
+    {
+        list($positionRoot, $rootExplicit) = EditTree::build($src);
+        $parentNode = self::nodeAt($positionRoot, $parentSegments);
+        $inlineRange = self::inlineRange($positionRoot, $parentNode, $parentSegments, $src);
+        if ($inlineRange !== null) {
+            list($from, $to) = $inlineRange;
+            $inner = substr($src, $from + 1, $to - $from - 2);
+            if ($inner === false) {
+                throw EditEnvelope::unsupported('internal: invalid inline parent range');
+            }
+            $pair = self::insertInlinePairText($key, $c);
+            $forceLayout = (EditEnvelope::requiresBlock($c) || (
+                $c['t'] === 'string'
+                && (strpos($c['v'], "\n") !== false || strpos($c['v'], "\r") !== false
+                    || PureText::stringNeedsMultiline($c['v']))
+            )) && self::blockEncodable($c);
+            if (PureScanner::trimBounds($inner, 0, strlen($inner))[0] === PureScanner::trimBounds($inner, 0, strlen($inner))[1]) {
+                $spliceFrom = $from + 1;
+                $spliceTo = $to - 1;
+                $insert = $pair;
+                $candidate = substr($src, 0, $spliceFrom) . $insert . substr($src, $spliceTo);
+            } else {
+                // Insert immediately before the closer; preserve whitespace
+                // preceding the closer and account for comma/space in range.
+                $spliceFrom = $to - 1;
+                $spliceTo = $spliceFrom;
+                $inlineText = '{' . $inner . '}';
+                $inlineScan = PureInlineScan::scan($inlineText, 'o', 1, strlen($inlineText));
+                if ($inlineScan['badEscape'] !== null || $inlineScan['closer'] === null) {
+                    throw EditEnvelope::unsupported('cannot split inline parent for insertion');
+                }
+                // Insert after a structural trailing comma, before trailing whitespace.
+                $lastSegment = $inlineScan['segs'][count($inlineScan['segs']) - 1];
+                list($lastStart, $lastEnd) = PureScanner::trimBounds(
+                    $inlineText,
+                    $lastSegment[0],
+                    $lastSegment[1]
+                );
+                $hasTrailingComma = count($inlineScan['segs']) > 1
+                    && $lastStart === $lastEnd;
+                if ($hasTrailingComma) {
+                    $comma = $inlineScan['segs'][count($inlineScan['segs']) - 2][1];
+                    $spliceFrom = $from + $comma + 1;
+                    $spliceTo = $spliceFrom;
+                    $insert = ' ' . $pair . ',';
+                } else {
+                    $insert = ', ' . $pair;
+                }
+                $candidate = substr($src, 0, $spliceFrom) . $insert . substr($src, $spliceTo);
+            }
+            $candidate = self::layoutInsertCandidate(
+                $src,
+                $candidate,
+                $positionRoot,
+                $parentSegments,
+                $c,
+                $spliceFrom,
+                $spliceTo,
+                strlen($insert),
+                true,
+                $forceLayout
+            );
+            return self::verifyInsertion($candidate, $original, $parentSegments, $key, $c);
+        }
+        if ($parentSegments !== []) {
+            // A block Object has a positional Block slot whose start/end
+            // delimit the opener through the closing brace. Insert before
+            // the closer, using the last sibling's indentation (or one
+            // level below the opener for an empty Object).
+            if ($parentNode['kind'] !== 'object') {
+                throw EditEnvelope::unsupported('internal: parent node is not an object');
+            }
+            $slot = $parentNode['slot'];
+            if (!is_array($slot) || $slot['r'] !== 'block') {
+                throw EditEnvelope::unsupported('parent is a noncontiguous value (dotted-key/reopen intermediate); no lossless insertion point exists');
+            }
+            $openerIndent = EditTree::lineIndent($src, $slot['start']);
+            $childIndent = $openerIndent . '    ';
+            if ($parentNode['pairs'] !== []) {
+                $last = $parentNode['pairs'][count($parentNode['pairs']) - 1][1];
+                if (is_array($last['slot'])) {
+                    $lastPos = $last['slot']['r'] === 'pair' ? $last['slot']['colon'] : $last['slot']['start'];
+                    $childIndent = EditTree::lineIndent($src, $lastPos);
+                }
+            }
+            $at = self::physicalLineRange($src, $slot['end'])[0];
+            $eol = EditTree::detectEol($src, $slot['end']);
+            $pair = self::insertBlockPair($key, $c, $childIndent, $eol);
+            $candidate = substr($src, 0, $at) . $childIndent . $pair . $eol . substr($src, $at);
+            $candidate = self::layoutInsertCandidate($src, $candidate, $positionRoot, $parentSegments, $c, $at, $at, strlen($childIndent . $pair . $eol), false);
+            return self::verifyInsertion($candidate, $original, $parentSegments, $key, $c);
+        }
+        if ($rootExplicit) {
+            $closer = self::rootCloserLineStart($src);
+            if ($closer === null) {
+                throw EditEnvelope::unsupported('internal: explicit root without closer');
+            }
+            $childIndent = $positionRoot['pairs'] === [] ? '    ' : '';
+            if ($positionRoot['pairs'] !== []) {
+                $last = $positionRoot['pairs'][count($positionRoot['pairs']) - 1][1];
+                if (is_array($last['slot'])) {
+                    $lastPos = $last['slot']['r'] === 'pair' ? $last['slot']['colon'] : $last['slot']['start'];
+                    $childIndent = EditTree::lineIndent($src, $lastPos);
+                }
+            }
+            $eol = EditTree::detectEol($src, $closer);
+            $pair = self::insertBlockPair($key, $c, $childIndent, $eol);
+            $candidate = substr($src, 0, $closer) . $childIndent . $pair . $eol . substr($src, $closer);
+            $candidate = self::layoutInsertCandidate($src, $candidate, $positionRoot, [], $c, $closer, $closer, strlen($childIndent . $pair . $eol), false);
+            return self::verifyInsertion($candidate, $original, [], $key, $c);
+        }
+        if ($positionRoot['inline']) {
+            throw EditEnvelope::unsupported('pure root insertion requires an Object');
+        }
+        if ($original['t'] !== 'object') {
+            throw EditEnvelope::unsupported('insertion parent is not an Object');
+        }
+        $eol = self::detectEol($src, strlen($src));
+        $pair = self::insertBlockPair($key, $c, '', $eol);
+        $endsWithEol = $src !== '' && ($src[strlen($src) - 1] === "\n" || $src[strlen($src) - 1] === "\r");
+        if ($src === '') {
+            $insert = $pair;
+        } elseif ($endsWithEol) {
+            $insert = $pair . $eol;
+        } else {
+            $insert = $eol . $pair;
+        }
+        $candidate = $src . $insert;
+        $candidate = self::layoutInsertCandidate($src, $candidate, $positionRoot, [], $c, strlen($src), strlen($src), strlen($insert), false);
+        return self::verifyInsertion($candidate, $original, [], $key, $c);
+    }
+
+    /**
+     * Render a new pair in a block slot using the same value planner as
+     * replacement. Compound values use block rendering; strings retain the
+     * planner's raw-marker/multiline decisions and source EOL/indent.
+     */
+    private static function insertBlockPair(string $key, array $c, string $indent, string $eol): string
+    {
+        if ($key === '') {
+            throw EditEnvelope::unsupported('empty key name is not representable');
+        }
+        list($body, $raw) = self::planValue(
+            $c,
+            'pair',
+            false,
+            false,
+            $indent,
+            $eol,
+            false,
+            true
+        );
+        return self::escapedKeySegment($key) . ':' . ($raw ? ':' : '') . ' ' . $body;
+    }
+
+    private static function nodeAt(array $root, array $segments): array
+    {
+        $node = $root;
+        foreach ($segments as $segment) {
+            if ($node['kind'] === 'object') {
+                $node = self::childOf($node, $segment);
+            } elseif ($node['kind'] === 'array') {
+                $idx = self::parseIndex($segment);
+                $node = $node['items'][$idx] ?? null;
+            } else {
+                $node = null;
+            }
+            if ($node === null) {
+                throw EditEnvelope::notFound();
+            }
+        }
+        return $node;
+    }
+
+    private static function inlineRange(array $root, array $node, array $path, string $src): ?array
+    {
+        if (isset($node['slot']) && is_array($node['slot'])) {
+            $slot = $node['slot'];
+            if ($slot['r'] !== 'pair' && $slot['r'] !== 'item') {
+                return null;
+            }
+            if (isset($slot['body0']) && $src[$slot['body0']] === '{') {
+                $start = $slot['body0'];
+                $end = $slot['end'];
+                if ($start < $end && $src[$end - 1] === '}') {
+                    return [$start, $end];
+                }
+            }
+            if (isset($slot['colon'])) {
+                $start = $slot['start'];
+                $end = $slot['end'];
+                if ($start < $end && $src[$start] === '{' && $src[$end - 1] === '}') {
+                    return [$start, $end];
+                }
+            }
+        }
+        if ($path === [] && !empty($root['inline'])) {
+            $metadata = $root['rootRange'] ?? null;
+            if (is_array($metadata)) {
+                $start = $metadata['start'] ?? null;
+                $end = $metadata['end'] ?? null;
+                if (is_int($start) && is_int($end) && $start < $end
+                    && (($src[$start] === '{' && $src[$end - 1] === '}')
+                        || ($src[$start] === '[' && $src[$end - 1] === ']'))) {
+                    return [$start, $end];
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Locate the explicit root Object's closing-brace line. */
+    private static function rootCloserLineStart(string $src): ?int
+    {
+        $end = strlen($src);
+        while ($end > 0) {
+            // Skip a terminal EOL before locating the preceding content
+            // line; using the LF byte itself would return the same line
+            // start forever.
+            if ($src[$end - 1] === "\n") {
+                --$end;
+                if ($end > 0 && $src[$end - 1] === "\r") { --$end; }
+                continue;
+            }
+            if ($src[$end - 1] === "\r") {
+                --$end;
+                continue;
+            }
+            list($start, $lineEnd) = self::physicalLineRange($src, $end - 1);
+            list($ts, $te) = PureScanner::trimBounds($src, $start, $lineEnd);
+            if (substr($src, $ts, $te - $ts) === '}') {
+                return $start;
+            }
+            $end = $start;
+        }
+        return null;
+    }
+
+    /** @return int[] */
+    private static function physicalLineRange(string $src, int $pos): array
+    {
+        $start = $pos;
+        while ($start > 0 && $src[$start - 1] !== "\n" && $src[$start - 1] !== "\r") { --$start; }
+        $end = $pos;
+        $len = strlen($src);
+        while ($end < $len && $src[$end] !== "\n" && $src[$end] !== "\r") { ++$end; }
+        return [$start, $end];
+    }
+
+    private static function blockEncodable(array $c): bool
+    {
+        if ($c['t'] === 'string') {
+            if (strpos($c['v'], "\r") !== false) {
+                return false;
+            }
+            foreach (explode("\n", $c['v']) as $line) {
+                if (trim($line, " \t") === '))') {
+                    return false;
+                }
+            }
+            return true;
+        }
+        if ($c['t'] === 'object') {
+            foreach ($c['pairs'] as $pair) {
+                if (!self::blockEncodable($pair[1])) { return false; }
+            }
+        } elseif ($c['t'] === 'array') {
+            foreach ($c['items'] as $item) {
+                if (!self::blockEncodable($item)) { return false; }
+            }
+        }
+        return true;
+    }
+
+    private static function insertInlinePairText(string $key, array $c): string
+    {
+        if ($key === '') {
+            throw EditEnvelope::unsupported('empty key name is not representable');
+        }
+        $body = $c['t'] === 'string'
+            ? EditEnvelope::encodeInline($c['v'], PureText::needsRawMarker($c['v']))
+            : self::inlineBody($c, true);
+        return self::escapedKeySegment($key) . ': ' . $body;
+    }
+
+    private static function verifyInsertion(string $candidate, $original, array $parentSegments, string $key, array $c): string
+    {
+        try {
+            $patched = EditEnvelope::toCval(PureParser::parse($candidate, false));
+        } catch (KtavException $e) {
+            throw EditEnvelope::unsupported('patch produced an invalid document: ' . $e->getMessage());
+        }
+        $expected = $original;
+        $parents = &$expected;
+        foreach ($parentSegments as $segment) {
+            if (!is_array($parents)) {
+                throw EditEnvelope::notFound();
+            }
+            if (($parents['t'] ?? null) === 'object') {
+                $idx = null;
+                foreach ($parents['pairs'] as $i => $pair) {
+                    if ($pair[0] === $segment) { $idx = $i; break; }
+                }
+                if ($idx === null) { throw EditEnvelope::notFound(); }
+                $parents = &$parents['pairs'][$idx][1];
+            } elseif (($parents['t'] ?? null) === 'array') {
+                $idx = self::parseIndex($segment);
+                if (!array_key_exists($idx, $parents['items'])) { throw EditEnvelope::notFound(); }
+                $parents = &$parents['items'][$idx];
+            } else {
+                throw EditEnvelope::notFound();
+            }
+        }
+        if (!is_array($parents) || ($parents['t'] ?? null) !== 'object') {
+            throw EditEnvelope::notFound();
+        }
+        $parents['pairs'][] = [$key, $c];
+        unset($parents);
+        if (!EditEnvelope::cvalEqual($patched, $expected)) {
+            throw EditEnvelope::unsupported('semantic mismatch after splice; no lossless patch produced');
+        }
+        return $candidate;
+    }
+
+    /** Encode a root-level pair with the pure inline/compound renderer. */
+    private static function insertRootPair(string $key, array $c): string
+    {
+        $keyText = self::escapedKeySegment($key);
+        if ($c['t'] === 'string' && $c['v'] === '') {
+            $body = '()';
+        } elseif ($c['t'] === 'object' || $c['t'] === 'array') {
+            $body = self::inlineBody($c, true);
+        } elseif ($c['t'] === 'string') {
+            $body = EditEnvelope::encodeInline($c['v'], PureText::needsRawMarker($c['v']));
+        } else {
+            $body = self::scalarBodyText($c);
+        }
+        return $keyText . ': ' . $body;
+    }
+
+    /** Source EOL policy shared with existing edit planners. */
+    private static function detectEol(string $text, int $at): string
+    {
+        for ($i = max(0, $at); $i < strlen($text); ++$i) {
+            if ($text[$i] === "\n") {
+                return "\n";
+            }
+            if ($text[$i] === "\r") {
+                return isset($text[$i + 1]) && $text[$i + 1] === "\n" ? "\r\n" : "\r";
+            }
+        }
+        $prefix = substr($text, 0, max(0, $at));
+        $cr = strrpos($prefix, "\r");
+        $lf = strrpos($prefix, "\n");
+        if ($cr !== false && ($lf === false || $cr > $lf)) {
+            return "\r";
+        }
+        if ($lf !== false && $lf > 0 && $prefix[$lf - 1] === "\r") {
+            return "\r\n";
+        }
+        return "\n";
     }
 
     /**
@@ -1368,7 +2062,8 @@ final class EditSplice
         int $from,
         int $to,
         int $inserted,
-        bool $inlineLeaf
+        bool $inlineLeaf,
+        bool $forceLayout = false
     ): string {
         $owner = self::inlineOwner($source, $root, $segments, $from, $inlineLeaf);
         if ($owner === null || $from < $owner[0]) {
@@ -1435,7 +2130,7 @@ final class EditSplice
         bool $inlineLeaf
     ): ?array {
         if ($root['inline']) {
-            return self::lineOwner($source, $pos);
+            return self::inlineRange($root, $root, [], $source);
         }
         $node = $root;
         foreach ($segments as $seg) {
@@ -1662,5 +2357,37 @@ final class EditSplice
         }
         $out .= $newBody;
         return $out;
+    }
+
+    /**
+     * Apply insertion-specific layout policy to an already-built candidate.
+     * Integration point for insertSplice; insertion planning can call this
+     * without coupling its splice construction to replacement planning.
+     *
+     * @param string[] $parentSegments path to the containing Object
+     * @param array $replacement inserted cval
+     */
+    public static function layoutInsertCandidate(
+        string $source,
+        string $candidate,
+        array $root,
+        array $parentSegments,
+        array $replacement,
+        int $from,
+        int $to,
+        int $inserted,
+        bool $inlineParent,
+        bool $forceLayout = false
+    ): string {
+        $insertForce = $forceLayout;
+        $lineTooWide = EditEnvelope::countScalars(EditTree::physicalLine($candidate, $from))
+            > max(EditEnvelope::countScalars(EditTree::physicalLine($source, $from)), self::LINE_LIMIT);
+        if (!$insertForce && !$lineTooWide) {
+            return $candidate;
+        }
+        return self::layoutAdjust(
+            $source, $candidate, $root, $parentSegments, $replacement,
+            $from, $to, $inserted, $inlineParent
+        );
     }
 }

@@ -1,4 +1,6 @@
 >>>>> lang=en
+Result:
+
 ```ktav
 servers: [{host: new, keep: yes}, standby]
 ```
@@ -22,14 +24,9 @@ port:: 9090
 
 The changed array expands with four-space indentation. The untouched object stays inline, and verbatim string contents are not reindented.
 
-```php
-$source = "a: [old, {keep: yes}]\n";
-$updated = PureBackend::editValue($source, "a.0", "x\ny");
-```
-
-Result:
-
 >>>>> lang=ru
+Результат:
+
 ```ktav
 servers: [{host: new, keep: yes}, standby]
 ```
@@ -52,13 +49,6 @@ port:: 9090
 #### 5. Многострочная замена: раскрывается только необходимое
 
 Изменённый массив раскрывается с отступом четыре пробела. Нетронутый объект остаётся inline, содержимое verbatim-строки не переотступается.
-
-```php
-$source = "a: [old, {keep: yes}]\n";
-$updated = PureBackend::editValue($source, "a.0", "x\ny");
-```
-
-Результат:
 
 >>>>> lang=zh
 ```ktav
@@ -88,6 +78,4 @@ port:: 9090
 $source = "a: [old, {keep: yes}]\n";
 $updated = PureBackend::editValue($source, "a.0", "x\ny");
 ```
-
-结果:
 

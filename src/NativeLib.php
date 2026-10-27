@@ -5,10 +5,9 @@ declare(strict_types=1);
 namespace Ktav;
 
 /**
- * FFI binding to the `ktav_cabi` shared library. Nine functions, all
- * using the canonical "caller-owned input pointer, callee-owned output
- * buffer" pattern. The output buffer is freed via `ktav_free` after
- * the PHP side has copied the bytes out.
+ * FFI binding to the `ktav_cabi` shared library. Document functions and
+ * source-edit/mutation functions use caller-owned input pointers and
+ * callee-owned output buffers. Returned buffers are freed via `ktav_free`.
  *
  * Internal — do not import directly. Use the {@see Ktav} facade.
  */
@@ -84,11 +83,11 @@ final class NativeLib
             );
         }
         // Provenance: a stale override / cache entry may carry an OLD
-        // binary. Since the immutable git-core pin (447a00b) the
+        // binary. Since the immutable git-core pin (8b6b45f) the
         // version STRING is no longer statically knowable, so the
         // AUTHORITATIVE load gate is the C ABI version: an ABI-1 (or
         // any non-2) binary is rejected for EVERY native operation.
-        // The exact 447a00b rev is provenance-checked in CI against
+        // The exact 8b6b45f rev is provenance-checked in CI against
         // Cargo.lock instead of here.
         self::assertAbiVersion((int) self::$ffi->ktav_abi_version(), $path);
         return self::$ffi;
@@ -96,7 +95,7 @@ final class NativeLib
 
     /**
      * Shared ABI gate: since the user-approved ABI 1 -> 2 bump, EVERY
-     * native call (original nine AND source edit) is served only by a
+     * native call (document functions and mutation operations) is served only by a
      * binary reporting ktav_abi_version() == 2; an ABI-1 binary is
      * rejected at load time with a clear version error — never a
      * silent pure fallback. Static so the rejection mechanism itself
@@ -109,7 +108,7 @@ final class NativeLib
                 'ktav_cabi ABI version mismatch in ' . $path
                 . ': expected ' . self::EXPECTED_ABI_VERSION . ', got ' . $actual
                 . ' — the loaded binary predates the user-approved ABI-2'
-                . ' source-edit set; pin the matching native library'
+                . ' mutation set; pin the matching native library'
             );
         }
     }
@@ -137,11 +136,63 @@ final class NativeLib
             const uint8_t *replacement, size_t replacement_len,
             uint8_t **out_buf, size_t *out_len,
             char **out_err, size_t *out_err_len);
-
         int ktav_abi_version();
-
         void ktav_free(uint8_t *ptr, size_t len);
         C;
+
+    private const MUTATION_CDEF = <<<'C'
+        int ktav_insert_value(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            const uint8_t *replacement, size_t replacement_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_insert_value_segments(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            const uint8_t *replacement, size_t replacement_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_remove_value(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_remove_value_segments(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_rename_key(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            const uint8_t *new_key, size_t new_key_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_rename_key_segments(
+            const uint8_t *src, size_t src_len, const uint8_t *path, size_t path_len,
+            const uint8_t *new_key, size_t new_key_len,
+            uint8_t **out_buf, size_t *out_len, char **out_err, size_t *out_err_len);
+        int ktav_abi_version();
+        void ktav_free(uint8_t *ptr, size_t len);
+        C;
+
+    private static ?\FFI $mutationFfi = null;
+
+    private static function mutationFfi(): \FFI
+    {
+        if (self::$mutationFfi !== null) {
+            return self::$mutationFfi;
+        }
+        if (!extension_loaded('ffi')) {
+            throw new KtavException('PHP FFI extension is required (php.ini: ffi.enable=1).');
+        }
+        $path = NativeLoader::resolve();
+        try {
+            self::$mutationFfi = \FFI::cdef(self::MUTATION_CDEF, $path);
+        } catch (\FFI\Exception $e) {
+            throw new KtavException(
+                'ktav insert/remove/rename symbols are not available in ' . $path
+                . ' — the loaded ktav_cabi does not export the ABI-'
+                . self::EXPECTED_ABI_VERSION . ' mutation set. Pin a matching native library.'
+                . ' Detail: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+        self::assertAbiVersion((int) self::$mutationFfi->ktav_abi_version(), $path);
+        return self::$mutationFfi;
+    }
 
     private static ?\FFI $editFfi = null;
 
@@ -175,7 +226,7 @@ final class NativeLib
             throw new KtavException(
                 'ktav_edit_value / ktav_edit_value_segments are not available in ' . $path
                 . ' — the loaded ktav_cabi does not export the ABI-'
-                . self::EXPECTED_ABI_VERSION . ' source-edit set.'
+                . self::EXPECTED_ABI_VERSION . ' source-edit/mutation set.'
                 . ' Pin the native library that exports these symbols; no pure fallback is performed.'
                 . ' Detail: ' . $e->getMessage(),
                 0,
@@ -197,9 +248,24 @@ final class NativeLib
      */
     public static function callEditBytes(string $fn, string $src, string $path, string $replacement): string
     {
-        $ffi = self::editFfi();
-        $lens = [strlen($src), strlen($path), strlen($replacement)];
-        $inputs = [$src, $path, $replacement];
+        return self::callEditMutationBytes($fn, [$src, $path, $replacement]);
+    }
+
+    /** Call any mutation export using its ordered UTF-8 byte input buffers. */
+    public static function callEditMutationBytes(string $fn, array $inputs): string
+    {
+        if (!in_array($fn, [
+            'ktav_edit_value', 'ktav_edit_value_segments',
+            'ktav_insert_value', 'ktav_insert_value_segments',
+            'ktav_remove_value', 'ktav_remove_value_segments',
+            'ktav_rename_key', 'ktav_rename_key_segments',
+        ], true)) {
+            throw new KtavException('unsupported native edit operation: ' . $fn);
+        }
+        $ffi = in_array($fn, ['ktav_edit_value', 'ktav_edit_value_segments'], true)
+            ? self::editFfi()
+            : self::mutationFfi();
+        $lens = array_map('strlen', $inputs);
 
         // One live byte per input (see callBytes for the NULL-with-len-0
         // rationale); the pad byte is never read.
@@ -219,15 +285,16 @@ final class NativeLib
         $outErrLen = $ffi->new('size_t');
 
         try {
-            $rc = $ffi->{$fn}(
-                $buffers[0], $lens[0],
-                $buffers[1], $lens[1],
-                $buffers[2], $lens[2],
-                \FFI::addr($outBuf),
-                \FFI::addr($outLen),
-                \FFI::addr($outErr),
-                \FFI::addr($outErrLen),
-            );
+            $args = [];
+            foreach ($buffers as $i => $buffer) {
+                $args[] = $buffer;
+                $args[] = $lens[$i];
+            }
+            $args[] = \FFI::addr($outBuf);
+            $args[] = \FFI::addr($outLen);
+            $args[] = \FFI::addr($outErr);
+            $args[] = \FFI::addr($outErrLen);
+            $rc = $ffi->{$fn}(...$args);
             if ($rc !== 0) {
                 // Free through the SAME FFI instance that produced the
                 // pointers: CData types are per-instance, and the base
@@ -264,9 +331,12 @@ final class NativeLib
         if ($len <= 0 || $ptr === null) {
             return '';
         }
-        $bytes = \FFI::string($ptr, $len);
-        $ffi->ktav_free($ffi->cast('uint8_t*', $ptr), $len);
-        return $bytes !== false ? $bytes : '';
+        try {
+            $bytes = \FFI::string($ptr, $len);
+            return $bytes !== false ? $bytes : '';
+        } finally {
+            $ffi->ktav_free($ffi->cast('uint8_t*', $ptr), $len);
+        }
     }
 
     /** freeIfPresent counterpart bound to the EDIT FFI instance. */
@@ -391,9 +461,12 @@ final class NativeLib
         if ($ptr === null) {
             return '';
         }
-        $bytes = \FFI::string($ptr, $len);
-        self::ffi()->ktav_free($ptr, $len);
-        return $bytes !== false ? $bytes : '';
+        try {
+            $bytes = \FFI::string($ptr, $len);
+            return $bytes !== false ? $bytes : '';
+        } finally {
+            self::ffi()->ktav_free($ptr, $len);
+        }
     }
 
     /** @param \FFI\CData $ptrField */

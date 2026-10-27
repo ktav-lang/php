@@ -179,19 +179,18 @@ stay ordered.
 
 ### Source-edit cookbook
 
-These examples describe the unreleased 0.9 API, not the published 0.8.1 package. They replace existing values only: keys are not renamed, missing paths are not created, and entries are not removed. Each snippet is independent; Rust `?` assumes an enclosing `Result`-returning function. Go examples panic only for these fixed, known-valid inputs; applications should handle the returned error.
+These examples describe the unreleased 0.9 API, not the published 0.8.1 package. Value replacement and insert/remove/rename are available through both pure and native backends. Each snippet is independent; Rust `?` assumes an enclosing `Result`-returning function. Go examples panic only for these fixed, known-valid inputs; applications should handle the returned error.
 
 The binding examples use the standalone pure backend, without a native binary. Native entry points accept the same paths and values: `ktav.EditValue` (Go), `Ktav.editValue` (Java), `KtavApi.EditValue(..., KtavBackend.Native)` (C#), `Ktav::editValue` (PHP), the package's native/FFI exports (JS), and `ktav.edit_value` (Python). C-ABI backends require ABI 2; PyO3/N-API/WASM require the matching preparing-0.9 core. Bun/Deno FFI calls return promises: use `await`; pure/Node/WASM examples shown here are synchronous.
 
-```php
-use Ktav\PureBackend;
-```
+Use `PureBackend` or the native backend (`Ktav::`) for value replacement, insertion, removal, and renaming; both backends follow the same mutation contract. Textual paths split on dots, with `\.` for a literal dot and `\\` for a literal backslash; segment variants take decoded literal path segments. For rename, `newKey` is one decoded key, not a path. Bun/Deno FFI calls return promises and require `await`.
 
 #### 1. Dotted deployment settings
 
 Only the address changes; the comment, dotted form and neighbouring user entry remain byte-for-byte unchanged.
 
 ```php
+use Ktav\PureBackend;
 $source = "## deployment\ntargets.storagehost.address: old\ntargets.storagehost.user: mcp-agent\n";
 $updated = PureBackend::editValue($source, "targets.storagehost.address", "192.168.0.88:22");
 ```
@@ -292,6 +291,7 @@ n  : +1
 The returned string keeps the BOM and CRLF, and does not gain a final newline. Its escaped representation is shown to make the bytes visible.
 
 ```php
+use Ktav\PureBackend;
 $source = "\u{FEFF}port: 8080\r\nhost: db";
 $updated = PureBackend::editValue($source, "port", 9090);
 ```
@@ -315,6 +315,23 @@ $updated = PureBackend::editValue("n: 1\n", "n", ['$i' => '9007199254740993']);
 ```ktav
 n: 9007199254740993
 ```
+
+#### 9. Insert, remove and rename (textual and segment paths)
+
+These new 0.9 insert/remove/rename operations are available through both pure and native backends and follow the same mutation contract. Insert adds a new final Object key without overwriting; removal targets an existing Object member or Array element without pruning ancestors (later Array elements shift); renaming requires an existing final Object member and a destination key absent from that same Object, preserving position and value. Insertion requires an existing parent Object; insertion into an Array is unsupported. Missing targets and invalid path/segment inputs are errors. Textual paths split on dots, with `\.` for a literal dot and `\\` for a literal backslash. Segment variants accept decoded literal path segments. `newKey` is one decoded key, not a path. Each snippet is independent.
+
+```php
+use Ktav\PureBackend;
+$source = 'settings: {old: 1, "a.b": 3}' . "\n";
+$inserted = PureBackend::insertValue($source, "settings.new", 2);
+$insertedLiteral = PureBackend::insertValueSegments($source, ["settings", "added"], 2);
+$removed = PureBackend::removeValue($source, "settings.old");
+$removedLiteral = PureBackend::removeValueSegments($source, ["settings", "a.b"]);
+$renamed = PureBackend::renameKey($source, "settings.old", "new.name");
+$renamedLiteral = PureBackend::renameKeySegments($source, ["settings", "old"], "new.name");
+```
+
+An existing insertion key is an error, not an overwrite. Array elements shift after removal. Structural edits to containers with interior comments are unsupported because comments cannot be preserved losslessly. Inline dotted syntax is supported for value replacement, but structural insert/remove/rename requiring a synthetic, noncontiguous dotted path is unsupported. A trailing comma is preserved when the edit can be represented losslessly; the editor does not prune empty ancestors or promise lossless rewriting for every structural layout.
 
 ### Diagnostics and safe failures in 0.9
 

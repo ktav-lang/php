@@ -66,6 +66,38 @@ describe('PureBackend structured error envelope', function () {
         );
     });
 
+    it('matches the Rust invalid UTF-8 body while retaining its raw byte span', function () {
+        $thrown = null;
+        try {
+            PureBackend::loads("abc\xE2\x82A");
+        } catch (KtavException $e) {
+            $thrown = $e;
+        }
+
+        expect($thrown)->toBeAnInstanceOf(KtavException::class);
+        expect($thrown->getBody())->toBe('input is not valid UTF-8: invalid utf-8 sequence of 2 bytes from index 3');
+        expect($thrown->getSpan())->toBe(['start' => 3, 'end' => 5]);
+        expect($thrown->getError())->toBe('InvalidUtf8');
+        expect($thrown->getErrorLine())->toBe(1);
+        expect($thrown->getLineText())->toBeNull();
+    });
+    it('uses Rust Utf8Error Display independently of the raw span', function () {
+        $cases = [
+            ["\xFF\x80", 'invalid utf-8 sequence of 1 bytes from index 0', [0, 2]],
+            ["\xE2\x82A", 'invalid utf-8 sequence of 2 bytes from index 0', [0, 2]],
+            ["\xF4\x90\x80\x80", 'invalid utf-8 sequence of 1 bytes from index 0', [0, 4]],
+            ["\xE2\x82", 'incomplete utf-8 byte sequence from index 0', [0, 2]],
+        ];
+        foreach ($cases as [$source, $body, $span]) {
+            $thrown = null;
+            try { PureBackend::loads($source); } catch (KtavException $e) { $thrown = $e; }
+            expect($thrown)->toBeAnInstanceOf(KtavException::class);
+            expect($thrown->getBody())->toBe('input is not valid UTF-8: ' . $body);
+            expect($thrown->getSpan())->toBe(['start' => $span[0], 'end' => $span[1]]);
+            expect($thrown->getErrorLine())->toBe(1);
+        }
+    });
+
     it('invalid UTF-8 fails before grammar with a nonempty byte span', function () {
         $thrown = null;
         try {

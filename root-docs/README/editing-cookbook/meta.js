@@ -3,5 +3,5 @@ export default {
   "number": null,
   "level": null,
   "title": null,
-  "bodyParts": 5
+  "bodyParts": 6
 }

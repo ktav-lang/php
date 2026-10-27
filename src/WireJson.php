@@ -165,12 +165,27 @@ final class WireJson
                     'path' => null,
                     'canonical' => null,
                     'spec_section' => null,
-                    'body' => null,
+                    'body' => 'edit replacement transport: only an EMPTY stdClass'
+                        . ' (an explicit empty Object) is supported',
                     'message' => 'edit replacement transport: only an EMPTY stdClass'
                         . ' (an explicit empty Object) is supported',
                 ]);
             }
             return $v; // json_encode(new stdClass) === '{}'
+        }
+        if ($editObjects) {
+            throw KtavException::fromEnvelope([
+                'error' => 'Message',
+                'reason' => null,
+                'line' => null,
+                'line_text' => null,
+                'span' => null,
+                'path' => null,
+                'canonical' => null,
+                'spec_section' => null,
+                'body' => 'edit replacement transport: unsupported PHP type ' . gettype($v),
+                'message' => 'edit replacement transport: unsupported PHP type ' . gettype($v),
+            ]);
         }
         throw new KtavException('unsupported value type for Ktav::dumps: ' . gettype($v));
     }

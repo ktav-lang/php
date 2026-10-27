@@ -216,6 +216,71 @@ final class Ktav
         );
     }
 
+    /** Append a new final Object key; existing keys are never overwritten. */
+    public static function insertValue(string $source, string $path, $replacement): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditBytes('ktav_insert_value', $source, $path, WireJson::encodeEditReplacement($replacement));
+    }
+
+    /** Segment-path variant of {@see insertValue}. */
+    public static function insertValueSegments(string $source, array $segments, $replacement): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditMutationBytes('ktav_insert_value_segments', [
+            $source, self::encodeEditSegments($segments), WireJson::encodeEditReplacement($replacement),
+        ]);
+    }
+
+    /** Remove the addressed value without pruning empty ancestors. */
+    public static function removeValue(string $source, string $path): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditMutationBytes('ktav_remove_value', [$source, $path]);
+    }
+
+    /** Segment-path variant of {@see removeValue}. */
+    public static function removeValueSegments(string $source, array $segments): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditMutationBytes('ktav_remove_value_segments', [$source, self::encodeEditSegments($segments)]);
+    }
+
+    /** Rename the final key using a literal decoded UTF-8 key. */
+    public static function renameKey(string $source, string $path, string $newKey): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditMutationBytes('ktav_rename_key', [$source, $path, $newKey]);
+    }
+
+    /** Segment-path variant of {@see renameKey}. */
+    public static function renameKeySegments(string $source, array $segments, string $newKey): string
+    {
+        self::validateEditSource($source);
+        return NativeLib::callEditMutationBytes('ktav_rename_key_segments', [$source, self::encodeEditSegments($segments), $newKey]);
+    }
+
+    private static function validateEditSource(string $source): void
+    {
+        // Parse with the native implementation before preparing mutation
+        // transport, so parser errors take precedence without rewriting source.
+        NativeLib::callBytes('ktav_loads', $source);
+    }
+
+    private static function encodeEditSegments(array $segments): string
+    {
+        $json = json_encode(array_values($segments), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if ($json === false) {
+            throw KtavException::fromEnvelope([
+                'error' => 'Message', 'reason' => null, 'line' => null, 'line_text' => null,
+                'span' => null, 'path' => null, 'canonical' => null, 'spec_section' => null,
+                'body' => null, 'message' => 'edit segments transport is not JSON-encodable: ' . json_last_error_msg(),
+            ]);
+        }
+        return $json;
+    }
+
+
     /**
      * Version string reported by the loaded `ktav_cabi`. With the
      * immutable git-core pin the string is informational; the

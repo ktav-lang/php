@@ -23,6 +23,8 @@ itself — for the latter see
 
 ## Unreleased
 
+- PHP source mutation now includes insert, remove and rename in both native and standalone pure backends. Insert adds a new final Object key without overwriting; remove targets an existing Object member or Array element without pruning ancestors (later Array elements shift); rename requires an existing final Object member and an absent destination key in that Object, preserving position and value. Insert requires an existing parent Object; Array insertion is unsupported. Native uses ABI 2 and the verified Rust core pin `8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910`; package versions remain unchanged and this unreleased 0.9 functionality is not part of published 0.8.1.
+
 ### 0.8.1
 
 #### Added

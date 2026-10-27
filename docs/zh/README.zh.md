@@ -166,19 +166,18 @@ Integer 身份是精确的数字串比较，Float 身份是精确的 f64 比较�
 
 ### 源文本编辑示例
 
-以下示例适用于尚未发布的 0.9 API，而非已发布的 0.8.1 包。只能替换已有值：不会重命名键、创建缺失路径或删除条目。各代码片段相互独立；Rust 的 `?` 假定外层函数返回 `Result`。Go 示例仅针对固定且有效的输入使用 panic；应用程序应处理返回的错误。
+以下示例适用于尚未发布的 0.9 API，而非已发布的 0.8.1 包。值替换以及插入、删除和重命名操作可通过 pure 和 native 后端使用。各代码片段相互独立；Rust 的 `?` 假定外层函数返回 `Result`。Go 示例仅针对固定且有效的输入使用 panic；应用程序应处理返回的错误。
 
 绑定示例使用无需原生二进制的独立纯实现。原生入口接收相同的路径和值：Go 的 `ktav.EditValue`、Java 的 `Ktav.editValue`、C# 的 `KtavApi.EditValue(..., KtavBackend.Native)`、PHP 的 `Ktav::editValue`、JS 包的 native/FFI 导出及 Python 的 `ktav.edit_value`。C ABI 后端要求 ABI 2；PyO3/N-API/WASM 要求兼容的 0.9 准备核心。Bun/Deno FFI 返回 promise，需要 `await`；此处 pure/Node/WASM 示例为同步调用。
 
-```php
-use Ktav\PureBackend;
-```
+值替换以及插入、删除和重命名操作可使用 `PureBackend` 或 native 后端（`Ktav::`）；两种后端遵循相同的修改契约。文本路径按点拆分；`\.` 表示字面点，`\\` 表示字面反斜杠。路径段变体接收已解码的字面路径段。重命名时，`newKey` 是单个已解码键名，而非路径。Bun/Deno FFI 调用返回 promise，需要 `await`。
 
 #### 1. 通过点分键修改部署配置
 
 只修改地址；注释、点分形式及相邻的用户字段逐字节保持不变。
 
 ```php
+use Ktav\PureBackend;
 $source = "## deployment\ntargets.storagehost.address: old\ntargets.storagehost.user: mcp-agent\n";
 $updated = PureBackend::editValue($source, "targets.storagehost.address", "192.168.0.88:22");
 ```
@@ -190,7 +189,6 @@ $updated = PureBackend::editValue($source, "targets.storagehost.address", "192.1
 targets.storagehost.address: 192.168.0.88:22
 targets.storagehost.user: mcp-agent
 ```
-
 #### 2. 字面点号：文本路径或路径段
 
 源码中带引号的键名就是 `a.b`。文本路径需要转义点号；路径段 API 直接接收解码后的键名。两个调用返回相同结果。
@@ -279,6 +277,7 @@ n  : +1
 返回值保留 BOM 和 CRLF，且不会增加末尾换行。以下转义表示使这些字节清晰可见。
 
 ```php
+use Ktav\PureBackend;
 $source = "\u{FEFF}port: 8080\r\nhost: db";
 $updated = PureBackend::editValue($source, "port", 9090);
 ```
@@ -302,6 +301,23 @@ $updated = PureBackend::editValue("n: 1\n", "n", ['$i' => '9007199254740993']);
 ```ktav
 n: 9007199254740993
 ```
+
+#### 9. 插入、删除和重命名（文本路径和路径段）
+
+新的 0.9 插入、删除和重命名操作可通过 pure 和 native 后端使用，并遵循相同的修改契约。插入会添加新的最后一个 Object 键而不覆盖已有键；删除现有 Object 成员或 Array 元素但保留其祖先（后续 Array 元素会移位）；重命名要求最后一个 Object 成员存在，且同一 Object 中目标键不存在，同时保留其位置和值。插入路径的父级必须指向现有 Object；不支持向 Array 插入。目标不存在或路径/路径段输入无效时会报错。文本路径按点拆分；`\.` 表示字面点，`\\` 表示字面反斜杠。路径段变体接收已解码的字面路径段。`newKey` 是单个已解码键名，而非路径。每个代码片段相互独立。
+
+```php
+use Ktav\PureBackend;
+$source = 'settings: {old: 1, "a.b": 3}' . "\n";
+$inserted = PureBackend::insertValue($source, "settings.new", 2);
+$insertedLiteral = PureBackend::insertValueSegments($source, ["settings", "added"], 2);
+$removed = PureBackend::removeValue($source, "settings.old");
+$removedLiteral = PureBackend::removeValueSegments($source, ["settings", "a.b"]);
+$renamed = PureBackend::renameKey($source, "settings.old", "new.name");
+$renamedLiteral = PureBackend::renameKeySegments($source, ["settings", "old"], "new.name");
+```
+
+插入时若键已存在会报错，不会覆盖。删除后 Array 元素会移位。由于无法无损保留注释，不支持对内部含注释的容器进行结构编辑。行内点分语法支持值替换，但需要合成非连续点分路径的结构插入/删除/重命名不受支持。若编辑可无损表示，则保留末尾逗号；编辑器不会清除空祖先，也不保证所有结构布局都能无损重写。
 
 ### 0.9 的诊断与安全失败
 

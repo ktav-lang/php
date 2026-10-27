@@ -1,4 +1,11 @@
 >>>>> lang=en
+```php
+$source = "a: [old, {keep: yes}]\n";
+$updated = PureBackend::editValue($source, "a.0", "x\ny");
+```
+
+Result:
+
 ```ktav
 a: [
     ((
@@ -19,15 +26,14 @@ $updated = PureBackend::editValue($source, "n", 1);
 assert($updated === $source);
 ```
 
-Result:
-
-```ktav
-n  : +1
+>>>>> lang=ru
+```php
+$source = "a: [old, {keep: yes}]\n";
+$updated = PureBackend::editValue($source, "a.0", "x\ny");
 ```
 
-#### 7. BOM, CRLF and an unterminated final line
+Результат:
 
->>>>> lang=ru
 ```ktav
 a: [
     ((
@@ -48,15 +54,9 @@ $updated = PureBackend::editValue($source, "n", 1);
 assert($updated === $source);
 ```
 
-Результат:
-
-```ktav
-n  : +1
-```
-
-#### 7. BOM, CRLF и последняя строка без перевода
-
 >>>>> lang=zh
+结果:
+
 ```ktav
 a: [
     ((
@@ -78,10 +78,4 @@ assert($updated === $source);
 ```
 
 结果:
-
-```ktav
-n  : +1
-```
-
-#### 7. BOM、CRLF 及无换行符的末行
 

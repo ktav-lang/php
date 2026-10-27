@@ -236,12 +236,16 @@ final class EditTree
             // Empty inline root.
             $this->rootConsumed = true;
             $this->rootInline = self::compoundNode($kind);
+            $this->rootInline['inline'] = true;
+            $this->rootInline['rootRange'] = ['start' => $ts, 'end' => $te];
             return true;
         }
         if ($this->src[$te - 1] === $closer) {
             // Closed inline root — position it and consume the document.
             $this->rootConsumed = true;
             $this->rootInline = $this->positionInline($ts, $te, $kind);
+            $this->rootInline['inline'] = true;
+            $this->rootInline['rootRange'] = ['start' => $ts, 'end' => $te];
             return true;
         }
         // Unterminated inline root attempt: unreachable post-parse.
@@ -650,38 +654,45 @@ final class EditTree
     }
 
     /**
-     * Insert under an already-decoded inline key (no dotted expansion
-     * inside inline compounds — § 5.8 keys are single segments;
-     * post-parse duplicates are unreachable).
+     * Insert under an already-decoded inline key, expanding dotted paths
+     * according to the same key-path grammar used by block keys.
      *
      * @return void
      */
     private function insertInlinePair(array &$table, string $rawKey, array $child)
     {
-        $d = PureScanner::decodeKeySegment($rawKey);
-        $key = isset($d['val']) && is_string($d['val']) ? $d['val'] : $rawKey;
-        $idx = self::findEntry($table, $key);
-        if ($idx !== null) {
-            // Reopen / duplicate: post-parse unreachable; mark the slot
-            // chain noncontiguous like the Rust descend would.
-            $table['pairs'][$idx][1]['slot'] = null;
-            if ($table['pairs'][$idx][1]['kind'] === 'object' && $child['kind'] === 'object') {
-                $sub = &$table['pairs'][$idx][1]; // in place: arrays copy
-                foreach ($child['pairs'] as $pair) {
-                    $existing = self::findEntry($sub, $pair[0]);
-                    if ($existing !== null) {
-                        $sub['pairs'][$existing][1] = $pair[1];
-                    } else {
-                        $sub['pairs'][] = $pair;
-                    }
+        // Inline keys use the same quoted/escaped dotted path grammar as
+        // block keys. Split on structural dots, then expand intermediate
+        // segments into synthetic objects while keeping the physical slot
+        // (and inline flag) on the leaf only.
+        $segs = PureScanner::splitKeyPath($rawKey, 0, strlen($rawKey));
+        $last = count($segs) - 1;
+        foreach ($segs as $i => $rawSeg) {
+            list($ss, $se) = PureScanner::trimBounds($rawSeg, 0, strlen($rawSeg));
+            $trimmed = $ss >= $se ? '' : substr($rawSeg, $ss, $se - $ss);
+            $d = PureScanner::decodeKeySegment($trimmed);
+            $key = isset($d['val']) && is_string($d['val']) ? $d['val'] : $trimmed;
+            $idx = self::findEntry($table, $key);
+            if ($i === $last) {
+                if ($idx !== null) {
+                    // Duplicate/conflicting paths cannot follow a successful
+                    // parse; retain fail-closed positional behavior.
+                    $table['pairs'][$idx][1] = $child;
+                } else {
+                    $table['pairs'][] = [$key, $child];
                 }
-                unset($sub);
                 return;
             }
-            $table['pairs'][$idx][1] = $child;
-            return;
+            if ($idx === null) {
+                $table['pairs'][] = [$key, self::compoundNode('object')];
+                $idx = count($table['pairs']) - 1;
+            } elseif ($table['pairs'][$idx][1]['kind'] !== 'object') {
+                return; // unreachable after successful parse
+            }
+            // Descending/reopening invalidates the contiguous parent slot.
+            $table['pairs'][$idx][1]['slot'] = null;
+            $table = &$table['pairs'][$idx][1];
         }
-        $table['pairs'][] = [$key, $child];
     }
 
     /** @return bool */

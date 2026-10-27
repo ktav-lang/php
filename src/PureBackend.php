@@ -121,6 +121,42 @@ final class PureBackend
         return Pure\Edit\EditSplice::editValueSegments($src, $segments, $replacement);
     }
 
+    /** Pure insertion of a new final Object key. */
+    public static function insertValue(string $src, string $path, $replacement): string
+    {
+        return Pure\Edit\EditSplice::insertValue($src, $path, $replacement);
+    }
+
+    /** @param string[] $segments */
+    public static function insertValueSegments(string $src, array $segments, $replacement): string
+    {
+        return Pure\Edit\EditSplice::insertValueSegments($src, array_values($segments), $replacement);
+    }
+
+    /** Pure removal of an existing value. */
+    public static function removeValue(string $src, string $path): string
+    {
+        return Pure\Edit\EditSplice::removeValue($src, $path);
+    }
+
+    /** @param string[] $segments */
+    public static function removeValueSegments(string $src, array $segments): string
+    {
+        return Pure\Edit\EditSplice::removeValueSegments($src, array_values($segments));
+    }
+
+    /** Pure rename of an existing Object key. */
+    public static function renameKey(string $src, string $path, string $newKey): string
+    {
+        return Pure\Edit\EditSplice::renameKey($src, $path, $newKey);
+    }
+
+    /** @param string[] $segments */
+    public static function renameKeySegments(string $src, array $segments, string $newKey): string
+    {
+        return Pure\Edit\EditSplice::renameKeySegments($src, array_values($segments), $newKey);
+    }
+
     /**
      * Pure-backend version marker (`pure-0.8.1` style) — never a
      * native version; the native one stays `Ktav::nativeVersion()`.

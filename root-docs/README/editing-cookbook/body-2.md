@@ -24,8 +24,6 @@ $source = "servers: [{host: old, keep: yes}, standby]\n";
 $updated = PureBackend::editValueSegments($source, ["servers", "0", "host"], "new");
 ```
 
-Result:
-
 >>>>> lang=ru
 #### 2. Буквальные точки: текстовый путь или сегменты
 
@@ -52,11 +50,7 @@ $source = "servers: [{host: old, keep: yes}, standby]\n";
 $updated = PureBackend::editValueSegments($source, ["servers", "0", "host"], "new");
 ```
 
-Результат:
-
 >>>>> lang=zh
-#### 2. 字面点号：文本路径或路径段
-
 源码中带引号的键名就是 `a.b`。文本路径需要转义点号；路径段 API 直接接收解码后的键名。两个调用返回相同结果。
 
 ```php

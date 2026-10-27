@@ -1,6 +1,8 @@
 >>>>> lang=en
 ## Unreleased
 
+- PHP source mutation now includes insert, remove and rename in both native and standalone pure backends. Insert adds a new final Object key without overwriting; remove targets an existing Object member or Array element without pruning ancestors (later Array elements shift); rename requires an existing final Object member and an absent destination key in that Object, preserving position and value. Insert requires an existing parent Object; Array insertion is unsupported. Native uses ABI 2 and the verified Rust core pin `8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910`; package versions remain unchanged and this unreleased 0.9 functionality is not part of published 0.8.1.
+
 ### 0.8.1
 
 #### Added
@@ -26,6 +28,8 @@
 >>>>> lang=ru
 ## Unreleased
 
+- Мутации исходника PHP теперь включают вставку, удаление и переименование как в native-, так и в самостоятельном pure-бэкенде. Вставка добавляет новый последний ключ Object без перезаписи; удаление затрагивает существующий член Object или элемент Array, не удаляя предков (последующие элементы Array сдвигаются); переименование требует существующий последний член Object и отсутствующий целевой ключ в этом Object, сохраняя позицию и значение. Для вставки нужен существующий родительский Object; вставка в Array не поддерживается. Native использует ABI 2 и проверенный pin ядра Rust `8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910`; версии пакетов не меняются, эта ещё не выпущенная функциональность 0.9 не входит в опубликованный 0.8.1.
+
 ### 0.8.1
 
 #### Добавлено
@@ -50,6 +54,8 @@
 
 >>>>> lang=zh
 ## Unreleased
+
+- PHP 源文本修改现已在 native 和独立 pure 后端中支持插入、删除及重命名。插入会添加新的最后一个 Object 键而不覆盖已有键；删除现有 Object 成员或 Array 元素但保留祖先（后续 Array 元素会移位）；重命名要求最后一个 Object 成员存在且同一 Object 中目标键不存在，同时保留位置和值。插入要求父级是现有 Object；不支持向 Array 插入。Native 使用 ABI 2 及已验证的 Rust 核心 pin `8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910`；包版本不变，这些尚未发布的 0.9 功能不属于已发布的 0.8.1。
 
 ### 0.8.1
 

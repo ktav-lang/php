@@ -50,6 +50,16 @@ final class EditEnvelope
         );
     }
 
+    /** EditAlreadyExists — insertion never overwrites an Object member. */
+    public static function alreadyExists(): KtavException
+    {
+        return self::envelope(
+            'EditAlreadyExists',
+            null,
+            'edit target already exists; insertion never overwrites'
+        );
+    }
+
     /** EditUnsupported with the human-readable limitation text. */
     public static function unsupported(string $reason): KtavException
     {
@@ -68,7 +78,7 @@ final class EditEnvelope
      */
     public static function message(string $text): KtavException
     {
-        return self::envelope('Message', null, $text);
+        return self::envelope('Message', $text, $text);
     }
 
     private static function envelope(string $code, ?string $body, string $message): KtavException

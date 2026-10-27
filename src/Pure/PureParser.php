@@ -90,8 +90,7 @@ final class PureParser
                 'line' => $line,
                 'line_text' => null,
                 'span' => ['start' => $bad[0], 'end' => $bad[1]],
-                'body' => 'input is not valid UTF-8: invalid utf-8 sequence of '
-                    . max(1, $bad[1] - $bad[0]) . ' byte(s) from index ' . $bad[0],
+                'body' => 'input is not valid UTF-8: ' . PureScanner::utf8ErrorDisplay($src, $bad),
                 'message' => 'InvalidUtf8: input is not valid UTF-8; first invalid byte sequence at byte offset ' . $bad[0],
             ]);
         }
