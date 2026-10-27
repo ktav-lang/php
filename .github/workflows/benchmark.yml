@@ -1,0 +1,89 @@
+name: Mutation benchmark (manual)
+
+on:
+  pull_request:
+    paths:
+      - 'bench/**'
+      - '.github/workflows/benchmark.yml'
+      - 'src/**'
+  workflow_dispatch:
+    inputs:
+      warmups:
+        description: Warmup mutation iterations per fixture/backend
+        required: false
+        default: '5'
+      repetitions:
+        description: Timed mutation iterations per fixture/backend
+        required: false
+        default: '30'
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native release library
+        run: cargo build --release -p ktav-cabi
+      - name: Setup PHP 7.4 with FFI
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: ffi, json, mbstring
+          ini-values: ffi.enable=1
+      - name: Install Composer dependencies and generate autoloader
+        run: composer install --no-interaction --no-progress --prefer-dist
+      - name: Run existing native/pure mutation benchmark
+        env:
+          KTAV_LIB_PATH: ${{ github.workspace }}/target/release/libktav_cabi.so
+          BENCH_WARMUPS: ${{ inputs.warmups }}
+          BENCH_REPETITIONS: ${{ inputs.repetitions }}
+          BENCH_SERIES: '7'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -d ffi.enable=1 bench/mutations.php | tee mutation-benchmark.json
+      - name: Prepare immutable benchmark source trees
+        shell: bash
+        env:
+          BASE_REF: 3665dcfd6afb30b69ac5afb0ed8b4ce147df6325
+          CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CANDIDATE_REF" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$BASE_REF^{commit}"
+          git cat-file -e "$CANDIDATE_REF^{commit}"
+          mkdir -p "$RUNNER_TEMP/benchmark-base/src" "$RUNNER_TEMP/benchmark-candidate/src"
+          git archive "$BASE_REF" src | tar -x -C "$RUNNER_TEMP/benchmark-base"
+          git archive "$CANDIDATE_REF" src | tar -x -C "$RUNNER_TEMP/benchmark-candidate"
+          test -d "$RUNNER_TEMP/benchmark-base/src"
+          test -d "$RUNNER_TEMP/benchmark-candidate/src"
+      - name: Run same-runner pure comparison
+        env:
+          BENCH_BASE_SRC: ${{ runner.temp }}/benchmark-base/src
+          BENCH_CANDIDATE_SRC: ${{ runner.temp }}/benchmark-candidate/src
+          BENCH_BASE_REF: 3665dcfd6afb30b69ac5afb0ed8b4ce147df6325
+          BENCH_CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          BENCH_WARMUPS: ${{ inputs.warmups }}
+          BENCH_REPETITIONS: ${{ inputs.repetitions }}
+          BENCH_SERIES: '7'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -d ffi.enable=1 bench/compare-mutations.php | tee mutation-comparison.json
+      - name: Publish benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-benchmark-results
+          path: |
+            mutation-benchmark.json
+            mutation-comparison.json
+          if-no-files-found: warn
