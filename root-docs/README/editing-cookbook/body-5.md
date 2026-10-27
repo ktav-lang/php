@@ -1,7 +1,16 @@
 >>>>> lang=en
+Result:
+
+```ktav
+n  : +1
+```
+
+#### 7. BOM, CRLF and an unterminated final line
+
 The returned string keeps the BOM and CRLF, and does not gain a final newline. Its escaped representation is shown to make the bytes visible.
 
 ```php
+use Ktav\PureBackend;
 $source = "\u{FEFF}port: 8080\r\nhost: db";
 $updated = PureBackend::editValue($source, "port", 9090);
 ```
@@ -16,20 +25,19 @@ Expansion is deterministic: a multiline replacement, growth beyond `max(100, ori
 
 #### 8. Exact Integer replacement
 
-The source Integer domain is signed 64-bit. This value exceeds JavaScript's safe-Number range but fits i64; use an exact host representation, not a rounded floating-point value. A typed Integer outside i64 cannot be preserved as an Integer in source and is refused instead of truncated. Use a String when a large identifier is text. Float identity distinguishes negative and positive zero; Object no-op equality ignores key order, while Array order remains significant.
-
-```php
-$updated = PureBackend::editValue("n: 1\n", "n", ['$i' => '9007199254740993']);
-```
+>>>>> lang=ru
+Результат:
 
 ```ktav
-n: 9007199254740993
+n  : +1
 ```
 
->>>>> lang=ru
+#### 7. BOM, CRLF и последняя строка без перевода
+
 Результат сохраняет BOM и CRLF, не добавляя финальный перевод строки. Экранированное представление делает эти байты видимыми.
 
 ```php
+use Ktav\PureBackend;
 $source = "\u{FEFF}port: 8080\r\nhost: db";
 $updated = PureBackend::editValue($source, "port", 9090);
 ```
@@ -44,20 +52,17 @@ $updated = PureBackend::editValue($source, "port", 9090);
 
 #### 8. Точная замена Integer
 
-Домен Integer в исходнике — знаковый 64-битный. Это значение больше безопасного диапазона JavaScript Number, но помещается в i64; используйте точное host-представление, а не округлённое число с плавающей точкой. Типизированный Integer вне i64 невозможно сохранить в исходнике как Integer: правка отказывает, не обрезая значение. Для текстового большого идентификатора используйте String. Float различает отрицательный и положительный нуль; no-op для Object не зависит от порядка ключей, порядок Array значим.
-
-```php
-$updated = PureBackend::editValue("n: 1\n", "n", ['$i' => '9007199254740993']);
-```
-
-```ktav
-n: 9007199254740993
-```
-
 >>>>> lang=zh
+```ktav
+n  : +1
+```
+
+#### 7. BOM、CRLF 及无换行符的末行
+
 返回值保留 BOM 和 CRLF，且不会增加末尾换行。以下转义表示使这些字节清晰可见。
 
 ```php
+use Ktav\PureBackend;
 $source = "\u{FEFF}port: 8080\r\nhost: db";
 $updated = PureBackend::editValue($source, "port", 9090);
 ```
@@ -73,12 +78,4 @@ $updated = PureBackend::editValue($source, "port", 9090);
 #### 8. 精确替换 Integer
 
 源文本的 Integer 域是有符号 64 位。此值超过 JavaScript Number 的安全整数范围，但仍在 i64 内；应使用精确的宿主表示，而非已舍入的浮点值。超出 i64 的类型化 Integer 无法在源码中保持 Integer 身份，因此会被拒绝而不是截断。大型文本标识符应使用 String。Float 区分负零和正零；Object 的 no-op 相等忽略键顺序，而 Array 顺序仍然重要。
-
-```php
-$updated = PureBackend::editValue("n: 1\n", "n", ['$i' => '9007199254740993']);
-```
-
-```ktav
-n: 9007199254740993
-```
 

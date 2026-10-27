@@ -116,18 +116,18 @@ jobs:
       # Provenance (release guards NOT weakened — the target moved):
       # Cargo.lock is generated in CI, NOT committed. The ktav core is
       # the IMMUTABLE GIT PIN chosen by the user for the 0.9
-      # source-edit ABI (rev 447a00bd012e8d3f347c7e1eb59c3f0d9a78332f);
+      # source-edit/mutation ABI (rev 8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910);
       # the TOML parse must show exactly one ktav [[package]] whose
       # source is that exact git rev — a registry swap, a local-path
       # override, a moved rev or a different branch fails the job here.
-      - name: Generate Cargo.lock and verify the immutable ktav git-core pin (447a00b, ABI 2)
+      - name: Generate Cargo.lock and verify the immutable ktav git-core pin (8b6b45f, ABI 2)
         shell: bash
         run: |
           set -e
           cargo generate-lockfile
           python3 - <<'PY'
           import sys, tomllib
-          REV = '447a00bd012e8d3f347c7e1eb59c3f0d9a78332f'
+          REV = '8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910'
           with open('Cargo.lock', 'rb') as f:
               data = tomllib.load(f)
           pkgs = [p for p in data.get('package', []) if p.get('name') == 'ktav']
@@ -150,8 +150,8 @@ jobs:
           with open('Cargo.toml', 'rb') as f:
               ws = tomllib.load(f)
           ktav = ws['workspace']['dependencies']['ktav']
-          if ktav.get('git') != 'https://github.com/ktav-lang/rust' or ktav.get('rev') != '447a00bd012e8d3f347c7e1eb59c3f0d9a78332f':
-              sys.exit('workspace ktav dependency is not the immutable 447a00b pin: %r' % (ktav,))
+          if ktav.get('git') != 'https://github.com/ktav-lang/rust' or ktav.get('rev') != '8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910':
+              sys.exit('workspace ktav dependency is not the immutable 8b6b45f pin: %r' % (ktav,))
           print('workspace ktav dependency pinned:', ktav['rev'])
           PY
 

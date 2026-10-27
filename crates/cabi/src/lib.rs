@@ -5,7 +5,9 @@
 //! PHP consumer loads via `FFI::cdef`: `ktav_loads`, `ktav_loads_strict`,
 //! `ktav_dumps`, `ktav_dumps_force_strings`, `ktav_emit_canonical`,
 //! `ktav_format`, `ktav_canonical_from_source`, `ktav_free`,
-//! `ktav_version` and `ktav_abi_version`. Same signatures, ownership
+//! `ktav_insert_value`, `ktav_insert_value_segments`, `ktav_remove_value`,
+//! `ktav_remove_value_segments`, `ktav_rename_key`, `ktav_rename_key_segments`,
+//! `ktav_free`, `ktav_version` and `ktav_abi_version`.
 //! contract (`ktav_free(ptr, len)` frees exactly what a `ktav_*` call
 //! returned), `0`/`1` return codes and JSON error envelopes as the
 //! handwritten shim this crate carried before ktav 0.8. The wire format

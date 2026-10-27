@@ -23,6 +23,8 @@ MINOR 递增即破坏性变更。
 
 ## Unreleased
 
+- PHP 源文本修改现已在 native 和独立 pure 后端中支持插入、删除及重命名。插入会添加新的最后一个 Object 键而不覆盖已有键；删除现有 Object 成员或 Array 元素但保留祖先（后续 Array 元素会移位）；重命名要求最后一个 Object 成员存在且同一 Object 中目标键不存在，同时保留位置和值。插入要求父级是现有 Object；不支持向 Array 插入。Native 使用 ABI 2 及已验证的 Rust 核心 pin `8b6b45ffbd9e50e1588e8ab6b1ae5d422bbe8910`；包版本不变，这些尚未发布的 0.9 功能不属于已发布的 0.8.1。
+
 ### 0.8.1
 
 #### 新增
