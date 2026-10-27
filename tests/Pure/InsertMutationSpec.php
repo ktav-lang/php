@@ -46,6 +46,17 @@ describe('pure insert mutation regressions (Rust edit_mutate.rs oracle)', functi
             ->toBe("cfg: {a: 1, b: 2,   }\n");
     });
 
+    it('preserves inline empty, whitespace, trailing-comma, and semantic exact-byte fixtures', function () use ($insert) {
+        expect($insert("a: {}\n", 'a.k', 'v'))->toBe("a: {k: v}\n");
+        expect($insert("a: {   }\n", 'a.k', 'v'))->toBe("a: {k: v}\n");
+        expect($insert("a: {x: 1,   }\n", 'a.k', 2))->toBe("a: {x: 1, k: 2,   }\n");
+
+        $source = "a: {x: +01,   }\n";
+        $mutated = $insert($source, 'a.k', 2);
+        expect($mutated)->toBe("a: {x: +01, k: 2,   }\n");
+        expect(PureBackend::loads($mutated)['a'])->toBe(['x' => '+01', 'k' => 2]);
+    });
+
     it('preserves mixed EOLs and BOM while mutating an Object nested in an Array', function () use ($insert) {
         $source = "\xEF\xBB\xBFfirst: 1\r\ncfg: [{a: 1,}]\nlast: 2\r";
         expect($insert($source, 'cfg.0.b', 2))

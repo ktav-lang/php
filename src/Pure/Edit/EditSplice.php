@@ -451,7 +451,8 @@ final class EditSplice
                 && (strpos($c['v'], "\n") !== false || strpos($c['v'], "\r") !== false
                     || PureText::stringNeedsMultiline($c['v']))
             )) && self::blockEncodable($c);
-            if (PureScanner::trimBounds($inner, 0, strlen($inner))[0] === PureScanner::trimBounds($inner, 0, strlen($inner))[1]) {
+            list($innerStart, $innerEnd) = PureScanner::trimBounds($inner, 0, strlen($inner));
+            if ($innerStart === $innerEnd) {
                 $spliceFrom = $from + 1;
                 $spliceTo = $to - 1;
                 $insert = $pair;
