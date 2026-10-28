@@ -1,0 +1,81 @@
+name: License checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-licenses:
+    name: Cargo dependency licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@b66acf5e9fe20f8aba065be86778a8a4c846f902
+        with:
+          command: check licenses
+
+  npm-licenses:
+    name: npm dependency licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci --ignore-scripts
+      - name: Check npm lockfile
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const allowed = new Set(["MIT", "Apache-2.0", "MIT OR Apache-2.0", "Apache-2.0 OR MIT"]);
+          function check(lock) {
+            if (lock?.lockfileVersion !== 3 || !lock.packages || typeof lock.packages !== "object" || Array.isArray(lock.packages) || !lock.packages[""]) throw new Error("Invalid npm lockfile");
+            return Object.entries(lock.packages).filter(([path, pkg]) => path !== "" && !allowed.has(pkg?.license)).map(([path, pkg]) => `${path}: ${JSON.stringify(pkg?.license)}`);
+          }
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: { license: "MIT AND GPL-3.0-only" } } }).length, 1);
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: {} } }).length, 1);
+          assert.equal(check({ lockfileVersion: 3, packages: { "": {}, x: { license: "MIT" } } }).length, 0);
+          const failures = check(JSON.parse(readFileSync("package-lock.json", "utf8")));
+          if (failures.length) { console.error(failures.join("\n")); process.exitCode = 1; }
+          NODE
+
+  composer-licenses:
+    name: Composer dependency licenses (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["7.4", "8.2", "8.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Resolve dependencies without scripts or plugins
+        run: composer update --no-interaction --no-progress --no-scripts --no-plugins --prefer-dist
+      - run: composer licenses --format=json > "$RUNNER_TEMP/composer-licenses.json"
+      - name: Check all Composer dependency licenses
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          const allowed = new Set(["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC", "MIT OR Apache-2.0", "Apache-2.0 OR MIT"]);
+          function check(report) {
+            if (!report?.dependencies || typeof report.dependencies !== "object" || Array.isArray(report.dependencies)) throw new Error("Invalid Composer license report");
+            return Object.entries(report.dependencies).filter(([, pkg]) => !Array.isArray(pkg?.license) || pkg.license.length === 0 || pkg.license.some((license) => !allowed.has(license))).map(([name, pkg]) => `${name}: ${JSON.stringify(pkg?.license)}`);
+          }
+          assert.equal(check({ dependencies: { a: { license: ["MIT"] } } }).length, 0);
+          assert.equal(check({ dependencies: { a: { license: [] } } }).length, 1);
+          assert.equal(check({ dependencies: { a: { license: ["MIT AND GPL-3.0-only"] } } }).length, 1);
+          const failures = check(JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/composer-licenses.json`, "utf8")));
+          if (failures.length) { console.error(failures.join("\n")); process.exitCode = 1; }
+          NODE
