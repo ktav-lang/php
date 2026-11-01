@@ -1,7 +1,6 @@
 name: Native ARM64 PHP host feasibility
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:

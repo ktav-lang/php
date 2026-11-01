@@ -96,7 +96,7 @@ commands = [
     'cd /d "' + str(source) + '"',
     'call buildconf.bat',
     'if errorlevel 1 exit /b 1',
-    'call configure.bat --disable-all --disable-zts --enable-cli --enable-phpdbg --with-ffi --without-pcre-jit --with-mp=4 --with-php-build="' + str(deps) + '"',
+    'call configure.bat --disable-all --disable-zts --enable-cli --enable-phpdbg --enable-tokenizer --enable-ctype --enable-filter --enable-mbstring --disable-mbregex --with-ffi --without-pcre-jit --with-mp=4 --with-php-build="' + str(deps) + '"',
     'if errorlevel 1 exit /b 1',
     'nmake',
     'if errorlevel 1 exit /b 1',
@@ -117,3 +117,10 @@ phpdbg = php.with_name('phpdbg.exe')
 debugger = pe(phpdbg)
 record = {'runner_arch': 'ARM64', 'php': identity, 'phpdbg': debugger, 'php_source': PHP_SOURCE, 'php_source_sha256': PHP_SHA256, 'sdk_commit': SDK, 'vcpkg_commit': VCPKG, 'libffi_sha256': hashlib.sha256(libraries[0].read_bytes()).hexdigest(), 'probe': probe, 'scope': 'CI-only native ARM64 PHP host feasibility. No Ktav DLL build/consumer acceptance, interpreter redistribution, package publication or product dependency change.'}
 (evidence / 'host-verification.json').write_text(json.dumps(record, sort_keys=True, indent=2) + '\n', encoding='utf-8')
+
+php.with_name('php.ini').write_text('ffi.enable=1' + chr(10), encoding='utf-8')
+for extension in ['mbstring', 'tokenizer', 'ctype', 'filter']:
+    if subprocess.check_output([str(php), '-n', '-r', 'echo extension_loaded("' + extension + '") ? "yes" : "no";'], text=True).strip() != 'yes':
+        raise ValueError('original test host extension missing: ' + extension)
+with Path(os.environ['GITHUB_ENV']).open('a', encoding='utf-8') as environment:
+    environment.write('KTAV_TEST_PHP=' + str(php) + chr(10))
