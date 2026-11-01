@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import struct
@@ -48,6 +49,20 @@ info = json.loads(subprocess.check_output([str(php), '-d', 'ffi.enable=1', '-r',
 if info['int_size'] != 8 or info['sapi'] != 'cli' or not all(info[name] for name in ['ffi', 'mbstring', 'tokenizer']):
     raise ValueError('native original PHP CLI test requirements missing')
 (output / 'php-info.json').write_text(json.dumps(info, indent=2), encoding='utf-8')
+cycles = []
+for backend, controls in [('native', 15), ('pure', 30)]:
+    child_environment = dict(environment)
+    child_environment['KTAV_LIB_PATH'] = str(binary.resolve()) if backend == 'native' else str(root / 'php-gnu-pure-no-native-artifact')
+    if backend == 'pure' and Path(child_environment['KTAV_LIB_PATH']).exists():
+        raise ValueError('pure child guard path must not exist')
+    command = [str(php), '-d', 'ffi.enable=1', '-d', 'memory_limit=128M', '-d', 'max_execution_time=20', 'tests/ValueCycleChild.php', backend]
+    result = subprocess.run(command, env=child_environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=35)
+    (output / ('cycle-' + backend + '-stdout.txt')).write_bytes(result.stdout)
+    (output / ('cycle-' + backend + '-stderr.txt')).write_bytes(result.stderr)
+    marker = 'COMPLETE backend=' + backend + ' cycles=12 controls=' + str(controls)
+    if result.returncode or result.stdout.decode('utf-8').splitlines().count(marker) != 1:
+        raise ValueError('actual bounded ordinary cycle child failed: ' + backend)
+    cycles.append({'backend': backend, 'exit_code': result.returncode, 'cycles': 12, 'controls': controls, 'completion_marker': marker})
 rows = []
 for label, options in [('full', []), ('native-corpus', ['--spec=tests/ConformanceSpec.php'])]:
     report = 'php-gnu-' + label + '.json'
@@ -60,14 +75,24 @@ for label, options in [('full', []), ('native-corpus', ['--spec=tests/Conformanc
     if result.returncode:
         raise ValueError('original PHP test suite failed: ' + label)
     data = Path(report).read_bytes()
+    (output / report).write_bytes(data)
     summary = json.loads(data)
     counts = summary['summary']
-    if summary['errors'] or any(counts[name] for name in ['failed', 'errored', 'pending', 'excluded']) or counts['passed'] <= 0 or counts['skipped'] != 6 or counts['total'] != counts['passed'] + counts['skipped']:
+    pending = 2 if label == 'full' else 0
+    if pending:
+        plain = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout.decode('utf-8'))
+        section = plain.split('Pending specifications: 2', 1)
+        if len(section) != 2:
+            raise ValueError('exact original cycle pending section required')
+        locations = [line.strip() for line in section[1].split('Skipped specifications:', 1)[0].splitlines() if line.strip()]
+        if len(locations) != 2 or not all(re.fullmatch(r'.*tests[\\/]+Pure[\\/]+ValueCycleSpec[.]php, line 5', line) for line in locations):
+            raise ValueError('pending may name only original no-expectation cycle specs, independently executed above')
+    if summary['errors'] or any(counts[name] for name in ['failed', 'errored', 'excluded']) or counts['pending'] != pending or counts['passed'] <= 0 or counts['skipped'] != 6 or counts['total'] != counts['passed'] + counts['skipped'] + pending:
         raise ValueError('original suite must pass with only its six documented canonical gaps: ' + label)
     (output / report).write_bytes(data)
     rows.append({'suite': label, **counts})
 if binary.read_bytes() != raw:
     raise ValueError('actual DLL changed during PHP consumers')
 subprocess.run(['git', 'diff', '--exit-code', '--', 'Cargo.toml', 'crates', 'src', 'tests', 'examples', 'composer.json', 'kahlan-config.php', 'root-docs', 'spec'], check=True)
-record = {'source_ref': SOURCE, 'target': target, 'runner_arch': arch, 'php_machine': expected_machine, 'php_executable_sha256': hashlib.sha256(php_bytes).hexdigest(), 'php_version': info['version'], 'binary_sha256': checksum, 'rust_and_sdk_paths_removed': True, 'original_tests_unchanged': True, 'suites': rows, 'scope': 'Actual original PHP native/pure consumers on matching CPU and source-bound GNU DLL. Six original canonical known-gap skips remain explicit, not skip-free corpus acceptance. No production/publication/historical repair.'}
+record = {'source_ref': SOURCE, 'target': target, 'runner_arch': arch, 'php_machine': expected_machine, 'php_executable_sha256': hashlib.sha256(php_bytes).hexdigest(), 'php_version': info['version'], 'binary_sha256': checksum, 'rust_and_sdk_paths_removed': True, 'original_tests_unchanged': True, 'suites': rows, 'ordinary_cycle_children': cycles, 'scope': 'Actual original PHP native/pure consumers on matching CPU and source-bound GNU DLL. Six original canonical known-gap skips remain explicit; two original no-expectation cycle specs require independently successful ordinary native/pure children and exact pending locations. Not skip-free corpus acceptance. No production/publication/historical repair.'}
 (output / 'consumer-verification.json').write_text(json.dumps(record, indent=2) + '\n', encoding='utf-8')
