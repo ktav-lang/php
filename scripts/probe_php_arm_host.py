@@ -62,6 +62,7 @@ with urllib.request.urlopen(request, timeout=90) as response, archive.open('xb')
         output.write(chunk)
 if checksum.hexdigest() != PHP_SHA256:
     raise ValueError('official PHP source archive identity differs')
+(evidence / 'source-archive.json').write_text(json.dumps({'url': PHP_SOURCE, 'sha256': checksum.hexdigest(), 'bytes': size, 'reviewed_large_source_member': {'path': 'php-8.2.35/ext/fileinfo/data_file.c', 'bytes': 42528803, 'sha256': 'd2375f7306b94d7b35f42cd9afc83f54b3072936fc1dfb90eac2add22d60ef5a'}}), encoding='utf-8')
 source_root = root / 'source'
 source_root.mkdir()
 with tarfile.open(archive, 'r:gz') as packed:
@@ -70,8 +71,11 @@ with tarfile.open(archive, 'r:gz') as packed:
     for item in packed.getmembers():
         path = PurePosixPath(item.name)
         total += item.size
-        if path.is_absolute() or '..' in path.parts or '\\' in item.name or ':' in item.name or item.name in seen or not (item.isdir() or item.isfile()) or item.size > 32 * 1024 * 1024 or total > 512 * 1024 * 1024:
-            raise ValueError('unsafe or oversized PHP source archive')
+        large_source = item.name == 'php-8.2.35/ext/fileinfo/data_file.c' and item.size == 42528803 and item.isfile()
+        if large_source and hashlib.file_digest(packed.extractfile(item), 'sha256').hexdigest() != 'd2375f7306b94d7b35f42cd9afc83f54b3072936fc1dfb90eac2add22d60ef5a':
+            raise ValueError('reviewed PHP large source member differs')
+        if path.is_absolute() or '..' in path.parts or '\\' in item.name or ':' in item.name or item.name in seen or not (item.isdir() or item.isfile()) or (item.size > 32 * 1024 * 1024 and not large_source) or total > 512 * 1024 * 1024:
+            raise ValueError('unsafe or oversized PHP source archive member: ' + repr(item.name))
         seen.add(item.name)
     packed.extractall(source_root, filter='data')
 source = source_root / 'php-8.2.35'
