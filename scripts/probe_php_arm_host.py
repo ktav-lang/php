@@ -102,7 +102,7 @@ commands = [
     'if errorlevel 1 exit /b 1',
 ]
 batch.write_text('\r\n'.join(commands) + '\r\n', encoding='utf-8')
-run(['cmd', '/d', '/c', str(sdk / 'phpsdk-starter.bat'), '-c', 'vs17', '-a', 'arm64', '-t', str(batch)], evidence / 'php-build.log')
+run(['cmd', '/d', '/c', str(sdk / 'phpsdk-starter.bat'), '-c', 'vs18', '-a', 'arm64', '-t', str(batch)], evidence / 'php-build.log')
 executables = [path for path in source.rglob('php.exe') if path.parent.name == 'Release']
 if len(executables) != 1:
     raise ValueError('one actual Release PHP CLI required')
