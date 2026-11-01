@@ -450,6 +450,26 @@ x.y\.z: v
 - 预编译二进制覆盖：`linux/amd64`、`linux/arm64`、`darwin/amd64`、
   `darwin/arm64`、`windows/amd64`、`windows/arm64`。
 
+## 准备中的 Windows 原生运行时
+
+准备中的 **0.8.1** Windows C ABI 使用真正的
+`x86_64-pc-windows-gnullvm` 和 `aarch64-pc-windows-gnullvm` 目标以及固定的
+LLVM MinGW UCRT SDK，而非 MSVC 构建路径。公开 DLL 文件名不变。
+PHP 进程的 CPU 必须与 DLL 匹配：Windows ARM64 上的 x64 PHP 进程仍需 x64 DLL。
+
+暂存发行载荷之前，会在真正的 x64 和 ARM64 PHP CLI 上运行原始 native/pure
+测试。源码构建的 ARM64 PHP host 只是 CI 工具，不是捆绑的解释器或消费者依赖。
+使用者需要自己的 PHP runtime 和 `ext-ffi`，无需 Rust 或原生编译器；
+纯模式仍然自包含，只需标准 `ext-json`。
+
+每个 DLL 保留内嵌的 Cargo/std、Rust 编译器和 GNU runtime 源码/许可资源。
+旁边的 `.NOTICE.json` 和 `.NOTICE.manifest.json` 保留完整原文及二进制/源码身份。
+Windows 系统/UCRT API 仍由操作系统提供。
+
+此前记录的六个 canonical round-trip 限制保持不变。两个不含 `expect()` 的
+cycle specifications 还必须单独执行有界 native/pure 子进程测试。这些准备不会
+发布软件包、接受 Microsoft 再分发条款，也不会修复历史资产。
+
 ## 许可证
 
 MIT OR Apache-2.0 —— 见 [LICENSE-MIT](../../LICENSE-MIT) 和 [LICENSE-APACHE](../../LICENSE-APACHE)。
