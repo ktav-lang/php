@@ -12,6 +12,7 @@ export default [
   "key-escaping",
   "native-lib-resolution",
   "runtime-support",
+  "windows-native-runtime",
   "license",
   "other-implementations"
 ]

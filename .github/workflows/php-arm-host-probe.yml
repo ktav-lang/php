@@ -1,0 +1,39 @@
+name: Native ARM64 PHP host feasibility
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-arm-host:
+    runs-on: windows-11-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: php/php-sdk-binary-tools
+          ref: 81b356186db123ce9cd65149cee4683211a59ebd
+          path: .ci-tools/php-sdk
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/vcpkg
+          ref: 9a5dfef5d1a0438a7d24856a85bd60f309d355e9
+          path: .ci-tools/vcpkg
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build and inspect genuine ARM64 PHP CLI and FFI host
+        run: python -I scripts/probe_php_arm_host.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: php-arm-host-evidence
+          path: ${{ runner.temp }}/php-arm-host/evidence/
+          if-no-files-found: error

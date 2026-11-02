@@ -466,6 +466,31 @@ PHP-бэкенд (`Ktav\PureBackend`) обходит всю эту цепочк�
 - Готовые бинарники для: `linux/amd64`, `linux/arm64`, `darwin/amd64`,
   `darwin/arm64`, `windows/amd64`, `windows/arm64`.
 
+## Подготовленный нативный Windows runtime
+
+Подготовленный Windows C ABI **0.8.1** использует настоящие цели
+`x86_64-pc-windows-gnullvm` и `aarch64-pc-windows-gnullvm` с закреплённым
+LLVM MinGW UCRT SDK вместо сборки MSVC. Публичные имена DLL сохранены.
+Архитектура процесса PHP должна совпадать с DLL: x64 PHP на Windows ARM64
+по-прежнему нужна x64 DLL.
+
+Перед staging выполняются исходные native/pure suites на настоящих x64
+и ARM64 PHP CLI. Собранный из исходников ARM64 PHP host — инструмент CI,
+а не включённый интерпретатор или зависимость потребителя. Потребителям
+нужны PHP runtime и `ext-ffi`, но не Rust или нативный компилятор; чистый
+режим остаётся самодостаточным со стандартным `ext-json`.
+
+Каждая DLL сохраняет встроенный ресурс Cargo/std, Rust compiler и исходных
+текстов/лицензий GNU runtime. Соседние `.NOTICE.json` и
+`.NOTICE.manifest.json` сохраняют полные оригинальные материалы и
+идентичности бинарника/исходников. Системные Windows/UCRT API остаются
+зависимостями ОС.
+
+Шесть ранее документированных canonical round-trip gaps не изменены.
+Две cycle specifications без `expect()` дополнительно требуют отдельного
+bounded native/pure child execution. Эта подготовка не публикует пакет,
+не принимает Microsoft redistribution terms и не исправляет старые assets.
+
 ## Лицензия
 
 MIT OR Apache-2.0 — см. [LICENSE-MIT](../../LICENSE-MIT) и [LICENSE-APACHE](../../LICENSE-APACHE).

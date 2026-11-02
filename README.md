@@ -465,6 +465,30 @@ it needs no native library, even with `ext-ffi` disabled.
 - Prebuilt binaries for: `linux/amd64`, `linux/arm64`, `darwin/amd64`,
   `darwin/arm64`, `windows/amd64`, `windows/arm64`.
 
+## Prepared Windows native runtime
+
+The prepared **0.8.1** Windows C ABI uses genuine
+`x86_64-pc-windows-gnullvm` and `aarch64-pc-windows-gnullvm` targets with
+the pinned LLVM MinGW UCRT SDK instead of the MSVC build path. Public DLL
+filenames are unchanged. PHP process CPU must match the DLL; an x64 PHP
+process on Windows ARM64 still needs the x64 DLL.
+
+Original native/pure suites run on genuine x64 and ARM64 PHP CLI before
+release staging. The source-built ARM64 PHP host is a CI tool, not a
+bundled interpreter or a consumer dependency. Consumers need their PHP
+runtime and `ext-ffi`, not Rust or a native compiler; pure mode remains
+self-contained with standard `ext-json` only.
+
+Each DLL retains its embedded Cargo/std, Rust compiler and GNU runtime
+source/grant resource. Adjacent `.NOTICE.json` and `.NOTICE.manifest.json`
+retain the complete original materials and binary/source identities.
+Windows system/UCRT APIs remain OS dependencies.
+
+Six previously documented canonical round-trip gaps remain unchanged.
+The two no-expectation cycle specifications also require separate bounded
+native/pure child execution. This runtime preparation does not publish a
+package, accept Microsoft redistribution terms or repair historical assets.
+
 ## License
 
 MIT OR Apache-2.0 — see [LICENSE-MIT](LICENSE-MIT) and [LICENSE-APACHE](LICENSE-APACHE).
